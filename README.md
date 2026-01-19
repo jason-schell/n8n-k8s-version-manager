@@ -97,6 +97,10 @@ Namespace: n8n-v2-1
 
 # With isolated database
 ./scripts/deploy-version.sh 2.1 --queue --isolated-db
+
+# With custom name (enables multiple deployments of same version)
+./scripts/deploy-version.sh 1.85.0 --regular --name acme-prod
+./scripts/deploy-version.sh 1.85.0 --regular --name acme-staging
 ```
 
 ### List Versions
@@ -140,6 +144,23 @@ Access the web UI at http://localhost:8080
 - **Manage snapshots**: Expand snapshots section, restore with confirmation
 - **Infrastructure status**: Monitor Postgres and Redis health in header
 
+#### New Features (2026-01-19)
+
+**Custom Deployment Naming**
+- Add optional custom name to deployments
+- Enables multiple deployments of same version
+- Example: Deploy "acme-prod" and "acme-staging" both running v1.85.0
+
+**Manual Snapshot Management**
+- Create database snapshots on demand via UI
+- Snapshots named with timestamp: `n8n-{timestamp}-manual.sql`
+- Complements automatic pre-deploy snapshots
+
+**GitHub Version Discovery**
+- Quick-select badges show recent n8n releases
+- Click badge to auto-fill version input
+- Reduces typos and makes discovering new versions easier
+
 ### Development Mode
 
 See [web-ui/README.md](web-ui/README.md) for development setup.
@@ -168,6 +189,9 @@ Ports are auto-calculated from version numbers:
 - v1.123 → Port 30123
 - v2.1 → Port 30201
 - vX.Y → Port 30000 + (X * 100) + Y
+
+For custom deployment names, ports are calculated using a hash:
+- Custom name → Port 30000 + (CRC32 hash mod 1000)
 
 ## Database Management
 

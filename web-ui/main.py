@@ -6,7 +6,10 @@ app = FastAPI(title="n8n Version Manager API")
 # CORS middleware for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite dev server
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev server (old UI)
+        "http://localhost:3000",  # Next.js dev server (new UI)
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

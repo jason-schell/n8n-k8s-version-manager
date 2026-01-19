@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: n8n-api
     ports:
-      - "8000:8000"
+      - "8000:8080"
     volumes:
       - ~/.kube/config:/root/.kube/config:ro
       - ./:/workspace:ro

@@ -165,6 +165,20 @@ Access the web UI at http://localhost:8080
 
 See [web-ui/README.md](web-ui/README.md) for development setup.
 
+## Web UI - Next.js (New)
+
+Modern UI built with Next.js 15 and shadcn/ui.
+
+See [web-ui-next/README.md](web-ui-next/README.md) for details.
+
+**Access:** http://localhost:3000
+
+**Features:**
+- Smooth animations and loading states
+- Real-time polling updates
+- Modern shadcn/ui components
+- Server-side rendering
+
 ### Stopping the UI
 
 ```bash

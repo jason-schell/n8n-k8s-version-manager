@@ -23,3 +23,10 @@ from api.infrastructure import router as infrastructure_router
 app.include_router(versions_router)
 app.include_router(snapshots_router)
 app.include_router(infrastructure_router)
+
+from fastapi.staticfiles import StaticFiles
+import os
+
+# Serve static files (must be last)
+if os.path.exists("static"):
+    app.mount("/", StaticFiles(directory="static", html=True), name="static")

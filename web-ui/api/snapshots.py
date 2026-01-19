@@ -91,3 +91,30 @@ async def restore_snapshot(request: RestoreRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/create")
+async def create_snapshot():
+    """Create manual database snapshot."""
+    try:
+        result = subprocess.run(
+            ["/workspace/scripts/create-snapshot.sh"],
+            capture_output=True,
+            text=True,
+            cwd="/workspace"
+        )
+
+        if result.returncode != 0:
+            return {
+                "success": False,
+                "error": result.stderr,
+                "output": result.stdout
+            }
+
+        return {
+            "success": True,
+            "message": "Snapshot creation started",
+            "output": result.stdout
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

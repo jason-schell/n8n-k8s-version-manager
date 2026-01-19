@@ -53,7 +53,8 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{/*
 Calculate NodePort from version string
-Converts version like "1.123" to port 30123
+Converts version like "2.3.6" to port 30236
+Formula: 30000 + major*100 + minor*10 + patch
 */}}
 {{- define "n8n-instance.nodePort" -}}
 {{- if .Values.service.nodePort }}
@@ -63,7 +64,8 @@ Converts version like "1.123" to port 30123
 {{- $parts := splitList "." $version }}
 {{- $major := index $parts 0 | atoi }}
 {{- $minor := index $parts 1 | default "0" | atoi }}
-{{- add 30000 (add (mul $major 100) $minor) }}
+{{- $patch := index $parts 2 | default "0" | atoi }}
+{{- add 30000 (add (mul $major 100) (add (mul $minor 10) $patch)) }}
 {{- end }}
 {{- end }}
 

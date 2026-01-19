@@ -55,6 +55,11 @@ export const api = {
     })
   },
 
+  // Available versions
+  getAvailableVersions: async (): Promise<{ versions: string[] }> => {
+    return fetchJson(`${API_BASE}/versions/available`)
+  },
+
   // Infrastructure
   getInfrastructureStatus: async (): Promise<Infrastructure> => {
     return fetchJson(`${API_BASE}/infrastructure/status`)

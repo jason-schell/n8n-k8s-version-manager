@@ -6,7 +6,7 @@ import { Toaster } from './components/ui/toaster'
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-background p-8">
       <div className="max-w-7xl mx-auto">
         <Header />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

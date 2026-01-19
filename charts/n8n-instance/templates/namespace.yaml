@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    app: n8n
+    version: {{ .Values.n8nVersion | quote }}
+    mode: {{ ternary "queue" "regular" .Values.queueMode }}

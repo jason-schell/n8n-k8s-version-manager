@@ -47,13 +47,25 @@ def parse_versions_output(output: str) -> List[Dict[str, Any]]:
             version_match = re.search(r'n8n-v(\d+)-(\d+)-(\d+)', namespace)
             if version_match:
                 version = f"{version_match.group(1)}.{version_match.group(2)}.{version_match.group(3)}"
-                current_deployment = {
-                    'version': version,
-                    'namespace': namespace,
-                    'mode': '',
-                    'status': '',
-                    'url': ''
-                }
+            else:
+                # For custom names, fetch version from namespace label
+                try:
+                    result = subprocess.run(
+                        ["kubectl", "get", "namespace", namespace, "-o", "jsonpath={.metadata.labels.version}"],
+                        capture_output=True,
+                        text=True
+                    )
+                    version = result.stdout.strip() or "unknown"
+                except:
+                    version = "unknown"
+
+            current_deployment = {
+                'version': version,
+                'namespace': namespace,
+                'mode': '',
+                'status': '',
+                'url': ''
+            }
 
         # Parse version (redundant, but keep for consistency)
         elif line.startswith('Version:') and current_deployment:

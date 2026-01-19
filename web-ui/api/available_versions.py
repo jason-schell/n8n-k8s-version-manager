@@ -3,12 +3,12 @@ from fastapi import APIRouter
 from datetime import datetime, timedelta
 from typing import List, Dict
 
-router = APIRouter(prefix="/api/versions", tags=["versions"])
+router = APIRouter(prefix="/api", tags=["versions"])
 
 # Simple in-memory cache (5 minute TTL)
 _cache: Dict[str, any] = {"versions": [], "expires": None}
 
-@router.get("/available")
+@router.get("/versions/available")
 async def get_available_versions():
     """Fetch recent n8n releases from GitHub API."""
     now = datetime.utcnow()

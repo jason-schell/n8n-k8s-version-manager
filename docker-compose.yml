@@ -1,8 +1,8 @@
 services:
   backend:
     build:
-      context: .
-      dockerfile: web-ui/Dockerfile
+      context: ./web-ui
+      dockerfile: Dockerfile
     container_name: n8n-api
     ports:
       - "8000:8000"
@@ -31,8 +31,8 @@ services:
   # Keep old UI for comparison (optional)
   frontend-old:
     build:
-      context: .
-      dockerfile: web-ui/Dockerfile
+      context: ./web-ui
+      dockerfile: Dockerfile
     container_name: n8n-ui-old
     ports:
       - "8080:8080"

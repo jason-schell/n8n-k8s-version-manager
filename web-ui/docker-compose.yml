@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  n8n-ui:
+    build: .
+    container_name: n8n-ui
+    network_mode: host
+    ports:
+      - "8080:8080"
+    volumes:
+      - ~/.kube/config:/root/.kube/config:ro
+      - ../:/workspace:ro
+    restart: unless-stopped

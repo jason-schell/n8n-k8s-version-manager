@@ -23,11 +23,13 @@ from api.versions import router as versions_router
 from api.snapshots import router as snapshots_router
 from api.infrastructure import router as infrastructure_router
 from api.available_versions import router as available_versions_router
+from api.cluster import router as cluster_router
 
 app.include_router(versions_router)
 app.include_router(snapshots_router)
 app.include_router(infrastructure_router)
 app.include_router(available_versions_router)
+app.include_router(cluster_router)
 
 from fastapi.staticfiles import StaticFiles
 import os

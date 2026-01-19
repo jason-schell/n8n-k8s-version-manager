@@ -42,3 +42,27 @@ export interface ApiResponse<T = unknown> {
   error?: string
   data?: T
 }
+
+export interface ClusterMemory {
+  allocatable_mi: number
+  used_mi: number
+  available_mi: number
+  utilization_percent: number
+}
+
+export interface ClusterDeployment {
+  namespace: string
+  memory_mi: number
+  mode: 'queue' | 'regular'
+  age_seconds: number
+}
+
+export interface ClusterResources {
+  error?: string
+  memory: ClusterMemory | null
+  can_deploy: {
+    queue_mode: boolean
+    regular_mode: boolean
+  }
+  deployments: ClusterDeployment[]
+}

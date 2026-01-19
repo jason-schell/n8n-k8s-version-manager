@@ -1,10 +1,12 @@
 export interface Deployment {
   namespace: string
+  name?: string
   version: string
-  status: 'running' | 'pending' | 'failed'
-  mode: 'queue' | 'regular'
-  url: string
+  status: 'running' | 'pending' | 'failed' | 'unknown'
+  mode: 'queue' | 'regular' | ''
+  url?: string  // Optional - may not exist for new deployments
   isolated_db: boolean
+  created_at?: string
 }
 
 export interface Snapshot {

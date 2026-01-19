@@ -28,6 +28,13 @@ COPY api/ ./api/
 # Copy built frontend
 COPY --from=frontend-builder /frontend/dist ./static
 
+# Copy entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Set KUBECONFIG to use the modified config created by entrypoint
+ENV KUBECONFIG=/tmp/kubeconfig
+
 EXPOSE 8080
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+ENTRYPOINT ["/entrypoint.sh"]

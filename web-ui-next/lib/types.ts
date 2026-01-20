@@ -89,3 +89,8 @@ export interface ClusterResources {
   }
   deployments: ClusterDeployment[]
 }
+
+export interface NamespaceStatus {
+  exists: boolean
+  namespace: string
+}

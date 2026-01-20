@@ -277,3 +277,21 @@ async def remove_version(namespace: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{namespace}/status")
+async def check_namespace_status(namespace: str):
+    """Check if a namespace exists (for polling deletion status)."""
+    try:
+        result = subprocess.run(
+            ["kubectl", "get", "namespace", namespace],
+            capture_output=True,
+            text=True
+        )
+
+        return {
+            "exists": result.returncode == 0,
+            "namespace": namespace
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

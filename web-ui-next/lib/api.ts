@@ -9,6 +9,7 @@ import type {
   SnapshotListResponse,
   CreateNamedSnapshotRequest,
   SnapshotActionResponse,
+  NamespaceStatus,
 } from './types'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -51,6 +52,10 @@ export const api = {
     return fetchApi(`/api/versions/${namespace}`, {
       method: 'DELETE',
     })
+  },
+
+  async checkNamespaceStatus(namespace: string): Promise<NamespaceStatus> {
+    return fetchApi(`/api/versions/${namespace}/status`)
   },
 
   // Snapshots

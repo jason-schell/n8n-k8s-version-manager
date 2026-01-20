@@ -109,9 +109,13 @@ if kubectl get namespace "$NAMESPACE" &> /dev/null; then
     echo "Found failed deployment in namespace '$NAMESPACE'. Cleaning up..."
     helm uninstall "$RELEASE_NAME" --namespace "$NAMESPACE" 2>/dev/null || true
     kubectl delete namespace "$NAMESPACE" --wait=false
-    echo "Waiting for namespace deletion..."
-    kubectl wait --for=delete namespace/"$NAMESPACE" --timeout=60s 2>/dev/null || true
-    sleep 2
+
+    # Wait for namespace to be fully deleted
+    if ! ./scripts/wait-for-namespace-deletion.sh "$NAMESPACE"; then
+      echo "ERROR: Failed to clean up namespace $NAMESPACE"
+      echo "Please manually delete: kubectl delete namespace $NAMESPACE --force --grace-period=0"
+      exit 1
+    fi
   else
     echo "ERROR: Namespace '$NAMESPACE' exists but has no Helm release"
     echo "Please manually clean up: kubectl delete namespace $NAMESPACE"

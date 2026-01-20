@@ -78,8 +78,25 @@ export function ChangeDatabaseDialog({
       // First delete the existing deployment
       await api.deleteDeployment(deployment.namespace)
 
-      // Wait a bit for cleanup
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Poll until namespace is fully deleted (max 2 minutes)
+      const MAX_POLLS = 60 // 60 polls * 2 seconds = 2 minutes
+      let polls = 0
+
+      while (polls < MAX_POLLS) {
+        const status = await api.checkNamespaceStatus(deployment.namespace)
+        if (!status.exists) {
+          // Namespace fully deleted, proceed with redeploy
+          break
+        }
+
+        // Wait 2 seconds before next poll
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        polls++
+      }
+
+      if (polls >= MAX_POLLS) {
+        throw new Error('Timeout waiting for namespace deletion. Please try again in a moment.')
+      }
 
       // Redeploy with new config
       return api.deployVersion({

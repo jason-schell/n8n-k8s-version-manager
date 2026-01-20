@@ -49,13 +49,11 @@ export default function Home() {
             label="Active Deployments"
             value={deployments?.length || 0}
             icon={<PackageIcon className="h-8 w-8" />}
-            loading={isLoadingDeployments}
           />
           <StatCard
             label="Snapshots"
             value={snapshots?.length || 0}
             icon={<DatabaseIcon className="h-8 w-8" />}
-            loading={isLoadingSnapshots}
           />
           <MemoryStatCard />
         </div>

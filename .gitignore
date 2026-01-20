@@ -40,3 +40,6 @@ api/cache/
 
 # Node modules
 node_modules/
+
+# Planning docs
+docs/plans/

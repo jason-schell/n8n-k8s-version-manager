@@ -53,6 +53,7 @@ export interface DeployRequest {
   isolated_db: boolean
   name?: string
   snapshot?: string
+  custom_values?: CustomValues
 }
 
 export interface AvailableVersionsResponse {
@@ -93,4 +94,19 @@ export interface ClusterResources {
 export interface NamespaceStatus {
   exists: boolean
   namespace: string
+}
+
+export interface EnvVar {
+  key: string
+  value: string
+}
+
+export interface CustomValues {
+  envVars?: EnvVar[]
+  resources?: {
+    cpu?: string
+    memory?: string
+  }
+  workerReplicas?: number
+  rawYaml?: string
 }

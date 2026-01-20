@@ -1,11 +1,3 @@
-FROM node:18-alpine AS frontend-builder
-
-WORKDIR /frontend
-COPY frontend/package*.json ./
-RUN npm ci
-COPY frontend/ ./
-RUN npm run build
-
 FROM python:3.11-slim
 
 # Install kubectl and helm
@@ -25,8 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY main.py .
 COPY api/ ./api/
 
-# Copy built frontend
-COPY --from=frontend-builder /frontend/dist ./static
+# Copy pre-built Next.js static files
+COPY static/ ./static/
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh

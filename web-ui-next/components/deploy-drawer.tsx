@@ -49,6 +49,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { CustomValuesForm } from '@/components/custom-values-form'
+import type { CustomValues } from '@/lib/types'
 
 interface DeployDrawerProps {
   open: boolean
@@ -79,6 +81,8 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
   const [versionPopoverOpen, setVersionPopoverOpen] = useState(false)
   const [snapshotPopoverOpen, setSnapshotPopoverOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [customValues, setCustomValues] = useState<CustomValues>({})
+  const [customValuesOpen, setCustomValuesOpen] = useState(false)
 
   const debouncedSearch = useDebounce(searchQuery, 300)
 
@@ -132,6 +136,7 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
         onOpenChange(false)
         setVersion('')
         setCustomName('')
+        setCustomValues({})
         queryClient.invalidateQueries({ queryKey: ['deployments'] })
       } else {
         toast.error('Deployment failed', {
@@ -184,12 +189,27 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
       return
     }
 
+    // Filter out empty env vars
+    const filteredCustomValues: CustomValues = {
+      ...customValues,
+      envVars: customValues.envVars?.filter(e => e.key && e.value),
+    }
+
+    // Only include custom_values if there's something to send
+    const hasCustomValues =
+      (filteredCustomValues.envVars && filteredCustomValues.envVars.length > 0) ||
+      filteredCustomValues.resources?.cpu ||
+      filteredCustomValues.resources?.memory ||
+      filteredCustomValues.workerReplicas !== undefined ||
+      filteredCustomValues.rawYaml
+
     deployMutation.mutate({
       version,
       mode,
       isolated_db: isolatedDb,
       name: customName || undefined,
       snapshot: snapshot || undefined,
+      custom_values: hasCustomValues ? filteredCustomValues : undefined,
     })
   }
 
@@ -446,6 +466,21 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
               </p>
             </div>
           )}
+
+          {/* Custom Values Section */}
+          <Collapsible open={customValuesOpen} onOpenChange={setCustomValuesOpen}>
+            <CollapsibleTrigger className="flex items-center gap-2 text-sm hover:underline">
+              <ChevronRightIcon className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
+              Custom Values
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-4 border rounded-lg p-4 mt-2">
+              <CustomValuesForm
+                value={customValues}
+                onChange={setCustomValues}
+                isQueueMode={mode === 'queue'}
+              />
+            </CollapsibleContent>
+          </Collapsible>
         </div>
 
         {/* Capacity Warning */}

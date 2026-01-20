@@ -9,7 +9,7 @@ data:
   # Database configuration
   DB_TYPE: "postgresdb"
   DB_POSTGRESDB_HOST: {{ include "n8n-instance.dbHost" . | quote }}
-  DB_POSTGRESDB_PORT: {{ .Values.database.shared.port | quote }}
+  DB_POSTGRESDB_PORT: "5432"
   DB_POSTGRESDB_DATABASE: {{ include "n8n-instance.dbDatabase" . | quote }}
   DB_POSTGRESDB_USER: {{ include "n8n-instance.dbUsername" . | quote }}
   DB_POSTGRESDB_PASSWORD: {{ include "n8n-instance.dbPassword" . | quote }}

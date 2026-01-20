@@ -37,10 +37,12 @@ import {
   LoaderIcon,
   ClockIcon,
   InfoIcon,
+  CameraIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Deployment } from '@/lib/types'
 import { ChangeDatabaseDialog } from './change-database-dialog'
+import { CreateSnapshotDialog } from './create-snapshot-dialog'
 import { DeploymentDetailsDrawer } from './deployment-details-drawer'
 
 function getAgeSeconds(isoDate: string | undefined): number {
@@ -67,6 +69,7 @@ export function DeploymentsTable() {
   const [deploymentToDelete, setDeploymentToDelete] = useState<Deployment | null>(null)
   const [deploymentToChangeDb, setDeploymentToChangeDb] = useState<Deployment | null>(null)
   const [deploymentToView, setDeploymentToView] = useState<Deployment | null>(null)
+  const [deploymentToSnapshot, setDeploymentToSnapshot] = useState<Deployment | null>(null)
   const queryClient = useQueryClient()
 
   const { data: deployments, isLoading } = useQuery({
@@ -245,6 +248,12 @@ export function DeploymentsTable() {
                         View Details
                       </DropdownMenuItem>
                       <DropdownMenuItem
+                        onClick={() => setDeploymentToSnapshot(d)}
+                      >
+                        <CameraIcon className="h-4 w-4 mr-2" />
+                        Create Snapshot
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
                         onClick={() => d.url && window.open(d.url)}
                         disabled={!d.url}
                       >
@@ -310,6 +319,12 @@ export function DeploymentsTable() {
         deployment={deploymentToView}
         open={!!deploymentToView}
         onOpenChange={(open) => !open && setDeploymentToView(null)}
+      />
+
+      <CreateSnapshotDialog
+        deployment={deploymentToSnapshot}
+        open={!!deploymentToSnapshot}
+        onOpenChange={(open) => !open && setDeploymentToSnapshot(null)}
       />
     </div>
   )

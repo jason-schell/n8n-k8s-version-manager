@@ -98,6 +98,17 @@ export const api = {
     })
   },
 
+  async createSnapshotFromDeployment(namespace: string, name?: string): Promise<SnapshotActionResponse> {
+    const request: CreateNamedSnapshotRequest = {
+      name: name || `${new Date().toISOString().slice(0, 10)}-from-${namespace}`,
+      source: namespace,
+    }
+    return fetchApi('/api/snapshots/create-named', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  },
+
   // Available versions
   async getAvailableVersions(): Promise<string[]> {
     const response = await fetchApi<AvailableVersionsResponse>('/api/versions/available')

@@ -50,7 +50,6 @@ export interface InfrastructureStatus {
 export interface DeployRequest {
   version: string
   mode: 'queue' | 'regular'
-  isolated_db: boolean
   name?: string
   snapshot?: string
   helm_values?: HelmValues
@@ -109,13 +108,6 @@ export interface ResourceSpec {
 export interface HelmValues {
   // Database settings
   database?: {
-    shared?: {
-      host?: string
-      port?: number
-      database?: string
-      username?: string
-      password?: string
-    }
     isolated?: {
       image?: string
       storage?: {

@@ -28,14 +28,6 @@ class ResourceSpec(BaseModel):
     limits: Optional[ResourceLimits] = None
 
 
-class DatabaseShared(BaseModel):
-    host: Optional[str] = None
-    port: Optional[int] = None
-    database: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
-
-
 class DatabaseIsolatedStorage(BaseModel):
     size: Optional[str] = None
 
@@ -46,7 +38,6 @@ class DatabaseIsolated(BaseModel):
 
 
 class DatabaseConfig(BaseModel):
-    shared: Optional[DatabaseShared] = None
     isolated: Optional[DatabaseIsolated] = None
 
 
@@ -89,7 +80,6 @@ class HelmValues(BaseModel):
 class DeployRequest(BaseModel):
     version: str
     mode: str  # "queue" or "regular"
-    isolated_db: bool = False
     name: Optional[str] = None  # Optional custom namespace name
     snapshot: Optional[str] = None  # Optional snapshot name for isolated DB
     helm_values: Optional[HelmValues] = None
@@ -113,21 +103,6 @@ def build_helm_values(helm_values: HelmValues) -> dict:
     # Database settings
     if helm_values.database:
         db = {}
-        if helm_values.database.shared:
-            shared = {}
-            if helm_values.database.shared.host:
-                shared['host'] = helm_values.database.shared.host
-            if helm_values.database.shared.port:
-                shared['port'] = helm_values.database.shared.port
-            if helm_values.database.shared.database:
-                shared['database'] = helm_values.database.shared.database
-            if helm_values.database.shared.username:
-                shared['username'] = helm_values.database.shared.username
-            if helm_values.database.shared.password:
-                shared['password'] = helm_values.database.shared.password
-            if shared:
-                db['shared'] = shared
-
         if helm_values.database.isolated:
             isolated = {}
             if helm_values.database.isolated.image:
@@ -276,8 +251,8 @@ def parse_versions_output(output: str) -> List[Dict[str, Any]]:
             except:
                 pass
 
-            # Get isolated_db and snapshot from Helm values
-            isolated_db = False
+            # All deployments now use isolated DB
+            isolated_db = True
             snapshot = None
             try:
                 result = subprocess.run(
@@ -288,8 +263,7 @@ def parse_versions_output(output: str) -> List[Dict[str, Any]]:
                 if result.returncode == 0:
                     import json
                     helm_values = json.loads(result.stdout)
-                    isolated_db = helm_values.get('isolatedDB', False)
-                    if isolated_db and 'database' in helm_values and 'isolated' in helm_values['database']:
+                    if 'database' in helm_values and 'isolated' in helm_values['database']:
                         snapshot_config = helm_values['database']['isolated'].get('snapshot', {})
                         if snapshot_config.get('enabled'):
                             snapshot_name = snapshot_config.get('name', '')
@@ -380,9 +354,6 @@ async def deploy_version(request: DeployRequest):
     try:
         mode_flag = "--queue" if request.mode == "queue" else "--regular"
         cmd = ["/workspace/scripts/deploy-version.sh", request.version, mode_flag]
-
-        if request.isolated_db:
-            cmd.append("--isolated-db")
 
         if request.name:
             cmd.extend(["--name", request.name])

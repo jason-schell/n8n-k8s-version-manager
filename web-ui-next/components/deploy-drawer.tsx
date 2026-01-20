@@ -223,7 +223,7 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
           </DrawerDescription>
         </DrawerHeader>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 overflow-y-auto max-h-[60vh]">
           {/* Version Selection */}
           <div className="space-y-2">
             <Label>Version</Label>

@@ -4,27 +4,40 @@
 
 MODE=${1:-all}
 
-# Get postgres pod
-POSTGRES_POD=$(kubectl get pods -n n8n-system -l app=postgres -o jsonpath='{.items[0].metadata.name}')
-
-if [ -z "$POSTGRES_POD" ]; then
-  echo "Error: PostgreSQL pod not found"
-  exit 1
-fi
+# Helper function to list files using a temporary pod
+list_files() {
+  local path=$1
+  # Delete any existing tmp-list pod first
+  kubectl delete pod tmp-list -n n8n-system --ignore-not-found=true >/dev/null 2>&1
+  # Run the listing command, redirecting stderr for cleanup messages only
+  kubectl run tmp-list --rm -i --restart=Never --image=busybox -n n8n-system \
+    --overrides="{\"spec\":{\"containers\":[{\"name\":\"tmp-list\",\"image\":\"busybox\",\"command\":[\"ls\",\"-1\",\"$path\"],\"volumeMounts\":[{\"name\":\"backup\",\"mountPath\":\"/backups\"}]}],\"volumes\":[{\"name\":\"backup\",\"persistentVolumeClaim\":{\"claimName\":\"backup-storage\"}}]}}" \
+    2>&1 | grep -v "^pod.*deleted"
+}
 
 # List snapshots
 case $MODE in
   --named-only)
-    kubectl exec "$POSTGRES_POD" -n n8n-system -- sh -c "ls -1 /backups/snapshots/*.sql 2>/dev/null || true" | sed 's|/backups/snapshots/||'
+    list_files "/backups/snapshots/" | grep '\.sql$' | grep -v '\.meta$' || true
     ;;
   --auto-only)
-    kubectl exec "$POSTGRES_POD" -n n8n-system -- sh -c "ls -1 /backups/n8n-*.sql 2>/dev/null || true" | sed 's|/backups/||'
+    list_files "/backups/" | grep '^n8n-.*\.sql$' | grep -v '\.meta$' || true
     ;;
   all|*)
     echo "=== Named Snapshots ==="
-    kubectl exec "$POSTGRES_POD" -n n8n-system -- sh -c "ls -1 /backups/snapshots/*.sql 2>/dev/null || echo '  (none)'" | sed 's|/backups/snapshots/||'
+    NAMED=$(list_files "/backups/snapshots/" | grep '\.sql$' | grep -v '\.meta$' || true)
+    if [ -z "$NAMED" ]; then
+      echo "  (none)"
+    else
+      echo "$NAMED" | sed 's/^/  /'
+    fi
     echo ""
     echo "=== Timestamped Snapshots ==="
-    kubectl exec "$POSTGRES_POD" -n n8n-system -- sh -c "ls -1 /backups/n8n-*.sql 2>/dev/null || echo '  (none)'" | sed 's|/backups/||'
+    AUTO=$(list_files "/backups/" | grep '^n8n-.*\.sql$' | grep -v '\.meta$' || true)
+    if [ -z "$AUTO" ]; then
+      echo "  (none)"
+    else
+      echo "$AUTO" | sed 's/^/  /'
+    fi
     ;;
 esac

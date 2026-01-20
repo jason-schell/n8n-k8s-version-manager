@@ -89,14 +89,12 @@ spec:
             echo "Named snapshot created: ${BACKUP_FILE} (\${SIZE})"
 
             # Create metadata file
-            cat > "/backups/snapshots/${BACKUP_FILE}.meta" <<METADATA
-{
-  "name": "${NAME}",
-  "created": "\$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-  "source": "${SOURCE}",
-  "type": "named"
-}
-METADATA
+            echo "{" > "/backups/snapshots/${BACKUP_FILE}.meta"
+            echo "  \"name\": \"${NAME}\"," >> "/backups/snapshots/${BACKUP_FILE}.meta"
+            echo "  \"created\": \"\$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> "/backups/snapshots/${BACKUP_FILE}.meta"
+            echo "  \"source\": \"${SOURCE}\"," >> "/backups/snapshots/${BACKUP_FILE}.meta"
+            echo "  \"type\": \"named\"" >> "/backups/snapshots/${BACKUP_FILE}.meta"
+            echo "}" >> "/backups/snapshots/${BACKUP_FILE}.meta"
           else
             echo "ERROR: Snapshot creation failed"
             exit 1

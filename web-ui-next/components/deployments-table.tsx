@@ -40,6 +40,7 @@ import {
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { Deployment } from '@/lib/types'
+import { ChangeDatabaseDialog } from './change-database-dialog'
 
 function getAgeSeconds(isoDate: string | undefined): number {
   if (!isoDate) return Infinity
@@ -63,6 +64,7 @@ function formatAge(isoDate: string | undefined): string {
 
 export function DeploymentsTable() {
   const [deploymentToDelete, setDeploymentToDelete] = useState<Deployment | null>(null)
+  const [deploymentToChangeDb, setDeploymentToChangeDb] = useState<Deployment | null>(null)
   const queryClient = useQueryClient()
 
   const { data: deployments, isLoading } = useQuery({
@@ -200,7 +202,11 @@ export function DeploymentsTable() {
                   <Badge variant="outline">{d.mode}</Badge>
                 </TableCell>
                 <TableCell>
-                  <div>
+                  <div
+                    className="cursor-pointer hover:bg-accent p-2 -m-2 rounded transition-colors"
+                    onClick={() => setDeploymentToChangeDb(d)}
+                    title="Click to change database configuration"
+                  >
                     <Badge variant="secondary">
                       {d.isolated_db ? 'Isolated' : 'Shared'}
                     </Badge>
@@ -292,6 +298,12 @@ export function DeploymentsTable() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ChangeDatabaseDialog
+        deployment={deploymentToChangeDb}
+        open={!!deploymentToChangeDb}
+        onOpenChange={(open) => !open && setDeploymentToChangeDb(null)}
+      />
     </div>
   )
 }

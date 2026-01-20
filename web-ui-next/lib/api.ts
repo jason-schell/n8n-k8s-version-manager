@@ -10,6 +10,9 @@ import type {
   CreateNamedSnapshotRequest,
   SnapshotActionResponse,
   NamespaceStatus,
+  EventsResponse,
+  PodsResponse,
+  LogsResponse,
 } from './types'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -109,5 +112,26 @@ export const api = {
   // Cluster resources
   async getClusterResources(): Promise<ClusterResources> {
     return fetchApi('/api/cluster/resources')
+  },
+
+  // K8s Observability
+  async getNamespaceEvents(namespace: string, limit: number = 50): Promise<EventsResponse> {
+    return fetchApi(`/api/versions/${namespace}/events?limit=${limit}`)
+  },
+
+  async getNamespacePods(namespace: string): Promise<PodsResponse> {
+    return fetchApi(`/api/versions/${namespace}/pods`)
+  },
+
+  async getNamespaceLogs(
+    namespace: string,
+    pod?: string,
+    container?: string,
+    tail: number = 100
+  ): Promise<LogsResponse> {
+    const params = new URLSearchParams({ tail: tail.toString() })
+    if (pod) params.append('pod', pod)
+    if (container) params.append('container', container)
+    return fetchApi(`/api/versions/${namespace}/logs?${params}`)
   },
 }

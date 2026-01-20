@@ -13,9 +13,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code (API only, no static files)
+# Copy application code
 COPY main.py .
-COPY api/ ./api/
+COPY *.py ./
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh

@@ -3,14 +3,12 @@
 import { useState } from 'react'
 import {
   LayoutDashboardIcon,
-  PackageIcon,
-  DatabaseIcon,
-  SettingsIcon,
   ChevronLeftIcon,
   ServerIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -18,7 +16,7 @@ import { cn } from '@/lib/utils'
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
 
-  const { data: infrastructure } = useQuery({
+  const { data: infrastructure, isLoading } = useQuery({
     queryKey: ['infrastructure'],
     queryFn: api.getInfrastructureStatus,
     refetchInterval: 10000, // Poll every 10s
@@ -31,7 +29,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'flex flex-col border-r bg-card transition-all duration-300',
+        'sticky top-0 h-screen flex flex-col border-r bg-card transition-all duration-300',
         collapsed ? 'w-16' : 'w-64'
       )}
     >
@@ -84,24 +82,45 @@ export function Sidebar() {
           <p className="text-xs font-medium text-muted-foreground">
             Infrastructure
           </p>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ServerIcon className="h-3 w-3" />
-              <span className="text-xs">Postgres</span>
-            </div>
-            <Badge variant="secondary" className="text-xs">
-              {infrastructure?.postgres.status || 'unknown'}
-            </Badge>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ServerIcon className="h-3 w-3" />
-              <span className="text-xs">Redis</span>
-            </div>
-            <Badge variant="secondary" className="text-xs">
-              {infrastructure?.redis.status || 'unknown'}
-            </Badge>
-          </div>
+          {isLoading ? (
+            <>
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-5 w-14" />
+              </div>
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-4 w-12" />
+                <Skeleton className="h-5 w-14" />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ServerIcon className="h-3 w-3" />
+                  <span className="text-xs">Postgres</span>
+                </div>
+                <Badge
+                  variant={infrastructure?.postgres.status === 'healthy' ? 'default' : 'destructive'}
+                  className="text-xs"
+                >
+                  {infrastructure?.postgres.status || 'unknown'}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ServerIcon className="h-3 w-3" />
+                  <span className="text-xs">Redis</span>
+                </div>
+                <Badge
+                  variant={infrastructure?.redis.status === 'healthy' ? 'default' : 'destructive'}
+                  className="text-xs"
+                >
+                  {infrastructure?.redis.status || 'unknown'}
+                </Badge>
+              </div>
+            </>
+          )}
         </div>
       )}
     </aside>

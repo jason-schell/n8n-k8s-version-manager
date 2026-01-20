@@ -2,7 +2,7 @@ services:
   # FastAPI backend
   backend:
     build:
-      context: ./web-ui
+      context: ./api
       dockerfile: Dockerfile
     container_name: n8n-api
     ports:

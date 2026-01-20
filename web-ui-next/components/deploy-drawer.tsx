@@ -49,8 +49,10 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { CustomValuesForm } from '@/components/custom-values-form'
-import type { CustomValues } from '@/lib/types'
+import { HelmValuesEditor } from '@/components/helm-values-editor'
+import type { HelmValues, K8sEvent, PodStatus } from '@/lib/types'
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 interface DeployDrawerProps {
   open: boolean
@@ -81,8 +83,8 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
   const [versionPopoverOpen, setVersionPopoverOpen] = useState(false)
   const [snapshotPopoverOpen, setSnapshotPopoverOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [customValues, setCustomValues] = useState<CustomValues>({})
-  const [customValuesOpen, setCustomValuesOpen] = useState(false)
+  const [helmValues, setHelmValues] = useState<HelmValues>({})
+  const [configOpen, setConfigOpen] = useState(false)
 
   const debouncedSearch = useDebounce(searchQuery, 300)
 
@@ -126,18 +128,86 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
 
   const isSearching = searchQuery !== debouncedSearch
 
+  const trackDeploymentProgress = async (namespace: string, versionStr: string) => {
+    const toastId = toast.loading('Deploying...', {
+      description: 'Creating namespace and resources...',
+    })
+
+    // Poll for up to 3 minutes (90 iterations * 2s)
+    for (let i = 0; i < 90; i++) {
+      await sleep(2000)
+
+      try {
+        const [eventsRes, podsRes] = await Promise.all([
+          api.getNamespaceEvents(namespace, 10),
+          api.getNamespacePods(namespace),
+        ])
+
+        const events = eventsRes.events || []
+        const pods = podsRes.pods || []
+
+        // Find latest significant event
+        const latestEvent = events[0]
+        if (latestEvent) {
+          const msg = latestEvent.message.length > 60
+            ? latestEvent.message.slice(0, 57) + '...'
+            : latestEvent.message
+          toast.loading('Deploying...', {
+            id: toastId,
+            description: msg,
+          })
+        }
+
+        // Check if all pods are running
+        const allRunning = pods.length > 0 && pods.every((p: PodStatus) => p.phase === 'Running')
+        if (allRunning) {
+          toast.success('Deployment complete', {
+            id: toastId,
+            description: `n8n ${versionStr} is now running (${pods.length} pod${pods.length !== 1 ? 's' : ''})`,
+          })
+          queryClient.invalidateQueries({ queryKey: ['deployments'] })
+          return
+        }
+
+        // Check for failures
+        const failed = events.find((e: K8sEvent) =>
+          e.type === 'Warning' &&
+          ['Failed', 'BackOff', 'ErrImagePull', 'ImagePullBackOff'].includes(e.reason)
+        )
+        if (failed) {
+          toast.warning('Deployment issue', {
+            id: toastId,
+            description: failed.message.slice(0, 80),
+          })
+          // Don't return - keep tracking, it might recover
+        }
+      } catch {
+        // Namespace might not exist yet, continue polling
+      }
+    }
+
+    // Timeout
+    toast.warning('Deployment taking longer than expected', {
+      id: toastId,
+      description: 'Check the deployment details for more info',
+    })
+  }
+
   const deployMutation = useMutation({
     mutationFn: api.deployVersion,
     onSuccess: (data) => {
       if (data.success) {
-        toast.success('Deployment started', {
-          description: `n8n ${version} is being deployed`,
-        })
+        // Calculate namespace
+        const namespace = customName || `n8n-v${version.replace(/\./g, '-')}`
+
         onOpenChange(false)
         setVersion('')
         setCustomName('')
-        setCustomValues({})
+        setHelmValues({})
         queryClient.invalidateQueries({ queryKey: ['deployments'] })
+
+        // Start tracking progress in background
+        trackDeploymentProgress(namespace, version)
       } else {
         toast.error('Deployment failed', {
           description: data.error || 'Unknown error',
@@ -189,19 +259,8 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
       return
     }
 
-    // Filter out empty env vars
-    const filteredCustomValues: CustomValues = {
-      ...customValues,
-      envVars: customValues.envVars?.filter(e => e.key && e.value),
-    }
-
-    // Only include custom_values if there's something to send
-    const hasCustomValues =
-      (filteredCustomValues.envVars && filteredCustomValues.envVars.length > 0) ||
-      filteredCustomValues.resources?.cpu ||
-      filteredCustomValues.resources?.memory ||
-      filteredCustomValues.workerReplicas !== undefined ||
-      filteredCustomValues.rawYaml
+    // Only include helm_values if there's something to send
+    const hasHelmValues = Object.keys(helmValues).length > 0
 
     deployMutation.mutate({
       version,
@@ -209,7 +268,7 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
       isolated_db: isolatedDb,
       name: customName || undefined,
       snapshot: snapshot || undefined,
-      custom_values: hasCustomValues ? filteredCustomValues : undefined,
+      helm_values: hasHelmValues ? helmValues : undefined,
     })
   }
 
@@ -467,17 +526,18 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
             </div>
           )}
 
-          {/* Custom Values Section */}
-          <Collapsible open={customValuesOpen} onOpenChange={setCustomValuesOpen}>
+          {/* Configuration Section */}
+          <Collapsible open={configOpen} onOpenChange={setConfigOpen}>
             <CollapsibleTrigger className="flex items-center gap-2 text-sm hover:underline">
-              <ChevronRightIcon className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
-              Custom Values
+              <ChevronRightIcon className={`h-4 w-4 transition-transform ${configOpen ? 'rotate-90' : ''}`} />
+              Configuration
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-4 border rounded-lg p-4 mt-2">
-              <CustomValuesForm
-                value={customValues}
-                onChange={setCustomValues}
+              <HelmValuesEditor
+                value={helmValues}
+                onChange={setHelmValues}
                 isQueueMode={mode === 'queue'}
+                isIsolatedDb={isolatedDb}
               />
             </CollapsibleContent>
           </Collapsible>

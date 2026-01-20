@@ -18,11 +18,11 @@ app.add_middleware(
 async def health_check():
     return {"status":"ok"}
 
-from api.versions import router as versions_router
-from api.snapshots import router as snapshots_router
-from api.infrastructure import router as infrastructure_router
-from api.available_versions import router as available_versions_router
-from api.cluster import router as cluster_router
+from versions import router as versions_router
+from snapshots import router as snapshots_router
+from infrastructure import router as infrastructure_router
+from available_versions import router as available_versions_router
+from cluster import router as cluster_router
 
 app.include_router(versions_router)
 app.include_router(snapshots_router)

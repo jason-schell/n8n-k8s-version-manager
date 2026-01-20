@@ -36,11 +36,12 @@ import {
   TrashIcon,
   LoaderIcon,
   ClockIcon,
+  InfoIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
 import type { Deployment } from '@/lib/types'
 import { ChangeDatabaseDialog } from './change-database-dialog'
+import { DeploymentDetailsDrawer } from './deployment-details-drawer'
 
 function getAgeSeconds(isoDate: string | undefined): number {
   if (!isoDate) return Infinity
@@ -65,6 +66,7 @@ function formatAge(isoDate: string | undefined): string {
 export function DeploymentsTable() {
   const [deploymentToDelete, setDeploymentToDelete] = useState<Deployment | null>(null)
   const [deploymentToChangeDb, setDeploymentToChangeDb] = useState<Deployment | null>(null)
+  const [deploymentToView, setDeploymentToView] = useState<Deployment | null>(null)
   const queryClient = useQueryClient()
 
   const { data: deployments, isLoading } = useQuery({
@@ -152,12 +154,12 @@ export function DeploymentsTable() {
               </TableCell>
             </TableRow>
           ) : (
-            // Real data with stagger animation
-            deployments?.map((d, i) => (
+            // Real data
+            deployments?.map((d) => (
               <TableRow
                 key={d.namespace}
-                className="animate-in fade-in slide-in-from-bottom-2"
-                style={{ animationDelay: `${i * 50}ms` }}
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => setDeploymentToView(d)}
               >
                 <TableCell className="font-mono font-medium">
                   {d.version}
@@ -184,7 +186,6 @@ export function DeploymentsTable() {
                             ? 'destructive'
                             : 'secondary'
                         }
-                        className={cn((displayStatus === 'pending' || displayStatus === 'starting') && 'animate-pulse')}
                       >
                         <span className="inline-block h-2 w-2 rounded-full bg-current mr-2" />
                         {displayStatus}
@@ -204,7 +205,10 @@ export function DeploymentsTable() {
                 <TableCell>
                   <div
                     className="cursor-pointer hover:bg-accent p-2 -m-2 rounded transition-colors"
-                    onClick={() => setDeploymentToChangeDb(d)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDeploymentToChangeDb(d)
+                    }}
                     title="Click to change database configuration"
                   >
                     <Badge variant="secondary">
@@ -217,7 +221,7 @@ export function DeploymentsTable() {
                     )}
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   {d.url ? (
                     <a
                       href={d.url}
@@ -229,13 +233,13 @@ export function DeploymentsTable() {
                       <ExternalLinkIcon className="h-3 w-3" />
                     </a>
                   ) : (
-                    <Badge variant="secondary" className="animate-pulse">
+                    <Badge variant="secondary">
                       <LoaderIcon className="h-3 w-3 mr-1 animate-spin" />
                       Pending...
                     </Badge>
                   )}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon">
@@ -243,6 +247,12 @@ export function DeploymentsTable() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => setDeploymentToView(d)}
+                      >
+                        <InfoIcon className="h-4 w-4 mr-2" />
+                        View Details
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => d.url && window.open(d.url)}
                         disabled={!d.url}
@@ -303,6 +313,12 @@ export function DeploymentsTable() {
         deployment={deploymentToChangeDb}
         open={!!deploymentToChangeDb}
         onOpenChange={(open) => !open && setDeploymentToChangeDb(null)}
+      />
+
+      <DeploymentDetailsDrawer
+        deployment={deploymentToView}
+        open={!!deploymentToView}
+        onOpenChange={(open) => !open && setDeploymentToView(null)}
       />
     </div>
   )

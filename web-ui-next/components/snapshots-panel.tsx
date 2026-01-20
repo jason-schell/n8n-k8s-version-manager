@@ -24,13 +24,14 @@ import { CameraIcon, DatabaseIcon, RotateCcwIcon, LoaderIcon } from 'lucide-reac
 import { toast } from 'sonner'
 import { useState } from 'react'
 import { CreateNamedSnapshotDialog } from './create-named-snapshot-dialog'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export function SnapshotsPanel() {
   const [restoreSnapshot, setRestoreSnapshot] = useState<string | null>(null)
   const [createNamedOpen, setCreateNamedOpen] = useState(false)
   const queryClient = useQueryClient()
 
-  const { data: snapshots } = useQuery({
+  const { data: snapshots, isLoading } = useQuery({
     queryKey: ['snapshots'],
     queryFn: api.getSnapshots,
     refetchInterval: 10000, // Poll every 10s
@@ -158,7 +159,23 @@ export function SnapshotsPanel() {
                 </span>
               </AccordionTrigger>
               <AccordionContent>
-                {snapshots?.length === 0 ? (
+                {isLoading ? (
+                  // Loading skeleton
+                  <div className="space-y-2 py-2">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-4 w-4" />
+                          <div className="space-y-1">
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-3 w-24" />
+                          </div>
+                        </div>
+                        <Skeleton className="h-8 w-20" />
+                      </div>
+                    ))}
+                  </div>
+                ) : snapshots?.length === 0 ? (
                   // Empty state
                   <div className="flex flex-col items-center justify-center py-8 text-center">
                     <DatabaseIcon className="h-12 w-12 text-muted-foreground mb-4" />

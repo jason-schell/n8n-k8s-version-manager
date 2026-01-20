@@ -4,6 +4,7 @@ import tempfile
 import os
 import logging
 import yaml
+import json
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -11,20 +12,77 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/api/versions", tags=["versions"])
 
 
-class EnvVar(BaseModel):
-    key: str
-    value: str
-
-
-class ResourceConfig(BaseModel):
+# Pydantic models for HelmValues
+class ResourceRequests(BaseModel):
     cpu: Optional[str] = None
     memory: Optional[str] = None
 
 
-class CustomValues(BaseModel):
-    envVars: Optional[List[EnvVar]] = None
-    resources: Optional[ResourceConfig] = None
-    workerReplicas: Optional[int] = None
+class ResourceLimits(BaseModel):
+    cpu: Optional[str] = None
+    memory: Optional[str] = None
+
+
+class ResourceSpec(BaseModel):
+    requests: Optional[ResourceRequests] = None
+    limits: Optional[ResourceLimits] = None
+
+
+class DatabaseShared(BaseModel):
+    host: Optional[str] = None
+    port: Optional[int] = None
+    database: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+
+class DatabaseIsolatedStorage(BaseModel):
+    size: Optional[str] = None
+
+
+class DatabaseIsolated(BaseModel):
+    image: Optional[str] = None
+    storage: Optional[DatabaseIsolatedStorage] = None
+
+
+class DatabaseConfig(BaseModel):
+    shared: Optional[DatabaseShared] = None
+    isolated: Optional[DatabaseIsolated] = None
+
+
+class RedisConfig(BaseModel):
+    host: Optional[str] = None
+    port: Optional[int] = None
+
+
+class N8nConfig(BaseModel):
+    encryptionKey: Optional[str] = None
+    timezone: Optional[str] = None
+    webhookUrl: Optional[str] = None
+
+
+class ResourcesConfig(BaseModel):
+    main: Optional[ResourceSpec] = None
+    worker: Optional[ResourceSpec] = None
+    webhook: Optional[ResourceSpec] = None
+
+
+class ReplicasConfig(BaseModel):
+    workers: Optional[int] = None
+
+
+class ServiceConfig(BaseModel):
+    type: Optional[str] = None
+
+
+class HelmValues(BaseModel):
+    database: Optional[DatabaseConfig] = None
+    redis: Optional[RedisConfig] = None
+    n8nConfig: Optional[N8nConfig] = None
+    resources: Optional[ResourcesConfig] = None
+    replicas: Optional[ReplicasConfig] = None
+    service: Optional[ServiceConfig] = None
+    extraEnv: Optional[Dict[str, str]] = None
     rawYaml: Optional[str] = None
 
 
@@ -34,7 +92,7 @@ class DeployRequest(BaseModel):
     isolated_db: bool = False
     name: Optional[str] = None  # Optional custom namespace name
     snapshot: Optional[str] = None  # Optional snapshot name for isolated DB
-    custom_values: Optional[CustomValues] = None
+    helm_values: Optional[HelmValues] = None
 
 
 def deep_merge(base: dict, override: dict) -> dict:
@@ -48,34 +106,106 @@ def deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
-def build_helm_values(custom: CustomValues) -> dict:
-    """Convert CustomValues to Helm values dictionary."""
+def build_helm_values(helm_values: HelmValues) -> dict:
+    """Convert HelmValues to Helm values dictionary."""
     values = {}
 
-    # Environment variables
-    if custom.envVars:
-        values['extraEnv'] = {ev.key: ev.value for ev in custom.envVars}
+    # Database settings
+    if helm_values.database:
+        db = {}
+        if helm_values.database.shared:
+            shared = {}
+            if helm_values.database.shared.host:
+                shared['host'] = helm_values.database.shared.host
+            if helm_values.database.shared.port:
+                shared['port'] = helm_values.database.shared.port
+            if helm_values.database.shared.database:
+                shared['database'] = helm_values.database.shared.database
+            if helm_values.database.shared.username:
+                shared['username'] = helm_values.database.shared.username
+            if helm_values.database.shared.password:
+                shared['password'] = helm_values.database.shared.password
+            if shared:
+                db['shared'] = shared
 
-    # Resource limits
-    if custom.resources:
+        if helm_values.database.isolated:
+            isolated = {}
+            if helm_values.database.isolated.image:
+                isolated['image'] = helm_values.database.isolated.image
+            if helm_values.database.isolated.storage and helm_values.database.isolated.storage.size:
+                isolated['storage'] = {'size': helm_values.database.isolated.storage.size}
+            if isolated:
+                db['isolated'] = isolated
+
+        if db:
+            values['database'] = db
+
+    # Redis settings
+    if helm_values.redis:
+        redis = {}
+        if helm_values.redis.host:
+            redis['host'] = helm_values.redis.host
+        if helm_values.redis.port:
+            redis['port'] = helm_values.redis.port
+        if redis:
+            values['redis'] = redis
+
+    # n8n config
+    if helm_values.n8nConfig:
+        n8n_config = {}
+        if helm_values.n8nConfig.encryptionKey:
+            n8n_config['encryptionKey'] = helm_values.n8nConfig.encryptionKey
+        if helm_values.n8nConfig.timezone:
+            n8n_config['timezone'] = helm_values.n8nConfig.timezone
+        if helm_values.n8nConfig.webhookUrl:
+            n8n_config['webhookUrl'] = helm_values.n8nConfig.webhookUrl
+        if n8n_config:
+            values['n8nConfig'] = n8n_config
+
+    # Resources
+    if helm_values.resources:
         resources = {}
-        if custom.resources.cpu or custom.resources.memory:
-            resources['main'] = {'limits': {}}
-            if custom.resources.cpu:
-                resources['main']['limits']['cpu'] = custom.resources.cpu
-            if custom.resources.memory:
-                resources['main']['limits']['memory'] = custom.resources.memory
+        for container_name in ['main', 'worker', 'webhook']:
+            container_spec = getattr(helm_values.resources, container_name, None)
+            if container_spec:
+                container_resources = {}
+                if container_spec.requests:
+                    requests = {}
+                    if container_spec.requests.cpu:
+                        requests['cpu'] = container_spec.requests.cpu
+                    if container_spec.requests.memory:
+                        requests['memory'] = container_spec.requests.memory
+                    if requests:
+                        container_resources['requests'] = requests
+                if container_spec.limits:
+                    limits = {}
+                    if container_spec.limits.cpu:
+                        limits['cpu'] = container_spec.limits.cpu
+                    if container_spec.limits.memory:
+                        limits['memory'] = container_spec.limits.memory
+                    if limits:
+                        container_resources['limits'] = limits
+                if container_resources:
+                    resources[container_name] = container_resources
         if resources:
             values['resources'] = resources
 
-    # Worker replicas
-    if custom.workerReplicas is not None:
-        values['replicas'] = {'workers': custom.workerReplicas}
+    # Replicas
+    if helm_values.replicas and helm_values.replicas.workers is not None:
+        values['replicas'] = {'workers': helm_values.replicas.workers}
 
-    # Raw YAML override (merge, raw takes precedence)
-    if custom.rawYaml:
+    # Service
+    if helm_values.service and helm_values.service.type:
+        values['service'] = {'type': helm_values.service.type}
+
+    # Extra env vars
+    if helm_values.extraEnv:
+        values['extraEnv'] = helm_values.extraEnv
+
+    # Raw YAML override (merge last, raw takes precedence)
+    if helm_values.rawYaml:
         try:
-            raw_values = yaml.safe_load(custom.rawYaml)
+            raw_values = yaml.safe_load(helm_values.rawYaml)
             if isinstance(raw_values, dict):
                 values = deep_merge(values, raw_values)
         except yaml.YAMLError:
@@ -260,14 +390,14 @@ async def deploy_version(request: DeployRequest):
         if request.snapshot:
             cmd.extend(["--snapshot", request.snapshot])
 
-        # Handle custom values
-        if request.custom_values:
-            helm_values = build_helm_values(request.custom_values)
-            if helm_values:
+        # Handle helm values
+        if request.helm_values:
+            helm_values_dict = build_helm_values(request.helm_values)
+            if helm_values_dict:
                 # Write to temp file
                 fd, values_file = tempfile.mkstemp(suffix='.yaml', prefix='helm-values-')
                 with os.fdopen(fd, 'w') as f:
-                    yaml.dump(helm_values, f)
+                    yaml.dump(helm_values_dict, f)
                 cmd.extend(["--values-file", values_file])
 
         result = subprocess.run(cmd, capture_output=True, text=True, cwd="/workspace")
@@ -385,5 +515,148 @@ async def check_namespace_status(namespace: str):
             "exists": result.returncode == 0,
             "namespace": namespace
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{namespace}/events")
+async def get_namespace_events(namespace: str, limit: int = 50):
+    """Get K8s events for a namespace."""
+    try:
+        result = subprocess.run(
+            ["kubectl", "get", "events", "-n", namespace,
+             "--sort-by=.lastTimestamp", "-o", "json"],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"Failed to get events: {result.stderr}")
+
+        events = []
+        data = json.loads(result.stdout)
+        items = data.get("items", [])
+
+        # Sort by timestamp descending (newest first) and limit
+        for item in items[:limit]:
+            events.append({
+                "type": item.get("type"),  # Normal, Warning
+                "reason": item.get("reason"),  # Scheduled, Pulled, Started, Failed
+                "message": item.get("message"),
+                "timestamp": item.get("lastTimestamp") or item.get("eventTime"),
+                "count": item.get("count", 1),
+                "object": {
+                    "kind": item.get("involvedObject", {}).get("kind"),
+                    "name": item.get("involvedObject", {}).get("name"),
+                }
+            })
+
+        return {"events": events}
+
+    except json.JSONDecodeError:
+        return {"events": []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{namespace}/pods")
+async def get_namespace_pods(namespace: str):
+    """Get detailed pod status for a namespace."""
+    try:
+        result = subprocess.run(
+            ["kubectl", "get", "pods", "-n", namespace, "-o", "json"],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"Failed to get pods: {result.stderr}")
+
+        pods = []
+        data = json.loads(result.stdout)
+
+        for item in data.get("items", []):
+            containers = []
+            for cs in item.get("status", {}).get("containerStatuses", []):
+                state = "unknown"
+                state_detail = None
+                if cs.get("state", {}).get("running"):
+                    state = "running"
+                elif cs.get("state", {}).get("waiting"):
+                    state = "waiting"
+                    state_detail = cs["state"]["waiting"].get("reason")
+                elif cs.get("state", {}).get("terminated"):
+                    state = "terminated"
+                    state_detail = cs["state"]["terminated"].get("reason")
+
+                containers.append({
+                    "name": cs.get("name"),
+                    "ready": cs.get("ready", False),
+                    "state": state,
+                    "state_detail": state_detail,
+                    "restart_count": cs.get("restartCount", 0),
+                })
+
+            pods.append({
+                "name": item["metadata"]["name"],
+                "phase": item.get("status", {}).get("phase"),  # Pending, Running, Succeeded, Failed
+                "containers": containers,
+                "created": item["metadata"].get("creationTimestamp"),
+            })
+
+        return {"pods": pods}
+
+    except json.JSONDecodeError:
+        return {"pods": []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{namespace}/logs")
+async def get_namespace_logs(namespace: str, pod: Optional[str] = None, container: Optional[str] = None, tail: int = 100):
+    """Get logs from pods in a namespace."""
+    try:
+        # If specific pod requested, get just that pod's logs
+        if pod:
+            cmd = ["kubectl", "logs", "-n", namespace, pod, f"--tail={tail}"]
+            if container:
+                cmd.extend(["-c", container])
+
+            log_result = subprocess.run(cmd, capture_output=True, text=True)
+            return {
+                "logs": [{
+                    "pod": pod,
+                    "container": container,
+                    "logs": log_result.stdout,
+                    "error": log_result.stderr if log_result.returncode != 0 else None
+                }]
+            }
+
+        # Otherwise get logs from all pods
+        pods_result = subprocess.run(
+            ["kubectl", "get", "pods", "-n", namespace, "-o", "jsonpath={.items[*].metadata.name}"],
+            capture_output=True,
+            text=True
+        )
+
+        if not pods_result.stdout.strip():
+            return {"logs": []}
+
+        logs = []
+        for pod_name in pods_result.stdout.split():
+            cmd = ["kubectl", "logs", "-n", namespace, pod_name, f"--tail={tail}"]
+            if container:
+                cmd.extend(["-c", container])
+
+            log_result = subprocess.run(cmd, capture_output=True, text=True)
+            logs.append({
+                "pod": pod_name,
+                "container": container,
+                "logs": log_result.stdout,
+                "error": log_result.stderr if log_result.returncode != 0 else None
+            })
+
+        return {"logs": logs}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

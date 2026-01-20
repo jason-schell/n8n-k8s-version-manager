@@ -53,7 +53,7 @@ export interface DeployRequest {
   isolated_db: boolean
   name?: string
   snapshot?: string
-  custom_values?: CustomValues
+  helm_values?: HelmValues
 }
 
 export interface AvailableVersionsResponse {
@@ -101,6 +101,67 @@ export interface EnvVar {
   value: string
 }
 
+export interface ResourceSpec {
+  requests?: { cpu?: string; memory?: string }
+  limits?: { cpu?: string; memory?: string }
+}
+
+export interface HelmValues {
+  // Database settings
+  database?: {
+    shared?: {
+      host?: string
+      port?: number
+      database?: string
+      username?: string
+      password?: string
+    }
+    isolated?: {
+      image?: string
+      storage?: {
+        size?: string
+      }
+    }
+  }
+
+  // Redis settings (queue mode only)
+  redis?: {
+    host?: string
+    port?: number
+  }
+
+  // n8n configuration
+  n8nConfig?: {
+    encryptionKey?: string
+    timezone?: string
+    webhookUrl?: string
+  }
+
+  // Resources for containers
+  resources?: {
+    main?: ResourceSpec
+    worker?: ResourceSpec
+    webhook?: ResourceSpec
+  }
+
+  // Replicas
+  replicas?: {
+    workers?: number
+  }
+
+  // Service configuration
+  service?: {
+    type?: 'NodePort' | 'LoadBalancer' | 'ClusterIP'
+  }
+
+  // Extra environment variables
+  extraEnv?: Record<string, string>
+
+  // Raw YAML override (merged last, takes precedence)
+  rawYaml?: string
+}
+
+// Legacy interface - kept for backward compatibility
 export interface CustomValues {
   envVars?: EnvVar[]
   resources?: {
@@ -109,4 +170,51 @@ export interface CustomValues {
   }
   workerReplicas?: number
   rawYaml?: string
+}
+
+// K8s Observability types
+export interface K8sEvent {
+  type: 'Normal' | 'Warning'
+  reason: string
+  message: string
+  timestamp: string
+  count: number
+  object: {
+    kind: string
+    name: string
+  }
+}
+
+export interface ContainerStatus {
+  name: string
+  ready: boolean
+  state: 'running' | 'waiting' | 'terminated' | 'unknown'
+  state_detail?: string
+  restart_count: number
+}
+
+export interface PodStatus {
+  name: string
+  phase: 'Pending' | 'Running' | 'Succeeded' | 'Failed' | 'Unknown'
+  containers: ContainerStatus[]
+  created: string
+}
+
+export interface PodLogs {
+  pod: string
+  container?: string
+  logs: string
+  error?: string
+}
+
+export interface EventsResponse {
+  events: K8sEvent[]
+}
+
+export interface PodsResponse {
+  pods: PodStatus[]
+}
+
+export interface LogsResponse {
+  logs: PodLogs[]
 }

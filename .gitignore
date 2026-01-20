@@ -34,3 +34,9 @@ ENV/
 *.swo
 *~
 .worktrees/
+
+# Cache
+api/cache/
+
+# Node modules
+node_modules/

@@ -78,3 +78,6 @@ n8nConfig:
   encryptionKey: "defaultEncryptionKeyChangeMe"
   timezone: "America/New_York"
   webhookUrl: ""  # Auto-generated if empty
+
+# Extra environment variables (added via UI)
+extraEnv: {}

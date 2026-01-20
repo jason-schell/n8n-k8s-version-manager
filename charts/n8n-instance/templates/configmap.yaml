@@ -38,3 +38,8 @@ data:
 
   # Diagnostics
   N8N_DIAGNOSTICS_ENABLED: "false"
+  {{- if .Values.extraEnv }}
+  {{- range $key, $value := .Values.extraEnv }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- end }}

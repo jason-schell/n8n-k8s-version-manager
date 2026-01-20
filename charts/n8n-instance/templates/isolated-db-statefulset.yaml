@@ -66,17 +66,17 @@ spec:
         livenessProbe:
           exec:
             command:
-            - pg_isready
-            - -U
-            - admin
+            - /bin/sh
+            - -c
+            - pg_isready -U admin -d n8n
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           exec:
             command:
-            - pg_isready
-            - -U
-            - admin
+            - /bin/sh
+            - -c
+            - pg_isready -U admin -d n8n
           initialDelaySeconds: 5
           periodSeconds: 5
   volumeClaimTemplates:

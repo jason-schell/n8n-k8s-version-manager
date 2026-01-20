@@ -203,20 +203,11 @@ export function DeploymentsTable() {
                   <Badge variant="outline">{d.mode}</Badge>
                 </TableCell>
                 <TableCell>
-                  <div
-                    className="cursor-pointer hover:bg-accent p-2 -m-2 rounded transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setDeploymentToChangeDb(d)
-                    }}
-                    title="Click to change database configuration"
-                  >
-                    <Badge variant="secondary">
-                      {d.isolated_db ? 'Isolated' : 'Shared'}
-                    </Badge>
+                  <div>
+                    <Badge variant="secondary">Isolated</Badge>
                     {d.snapshot && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        {d.snapshot}
+                        from: {d.snapshot}
                       </p>
                     )}
                   </div>

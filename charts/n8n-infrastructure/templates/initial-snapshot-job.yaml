@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-initial-snapshot
+  namespace: n8n-system
+  labels:
+    {{- include "n8n-infrastructure.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: create-initial
+        image: postgres:16
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+
+          # Check if initial snapshot already exists
+          if [ -f /backups/snapshots/initial.sql ]; then
+            echo "Initial snapshot already exists, skipping"
+            exit 0
+          fi
+
+          mkdir -p /backups/snapshots
+
+          # Create empty database snapshot
+          echo "-- Initial empty database snapshot" > /backups/snapshots/initial.sql
+          echo "-- Created: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /backups/snapshots/initial.sql
+
+          # Create metadata
+          cat > /backups/snapshots/initial.sql.meta <<EOF
+{
+  "name": "initial",
+  "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "source": "infrastructure",
+  "type": "named",
+  "description": "Empty initial snapshot"
+}
+EOF
+
+          echo "Initial snapshot created"
+        volumeMounts:
+        - name: backup-storage
+          mountPath: /backups
+      volumes:
+      - name: backup-storage
+        persistentVolumeClaim:
+          claimName: backup-storage

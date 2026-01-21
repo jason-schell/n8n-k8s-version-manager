@@ -98,19 +98,20 @@ echo "Restoring database in ${NAMESPACE}..."
 # 2. Pipe it directly to the target postgres
 
 # Get the snapshot content and pipe to target postgres
+# First drop and recreate database, then restore from snapshot via stdin
+kubectl exec -n "$NAMESPACE" "$POSTGRES_POD" -- sh -c "
+  echo 'Dropping existing database...'
+  psql -U admin -d postgres -c 'DROP DATABASE IF EXISTS n8n;'
+
+  echo 'Creating fresh database...'
+  psql -U admin -d postgres -c 'CREATE DATABASE n8n OWNER admin;'
+"
+
+echo "Piping snapshot data to postgres..."
 kubectl exec -n n8n-system deploy/backup-storage -- cat /backups/restore-temp.sql | \
-  kubectl exec -i -n "$NAMESPACE" "$POSTGRES_POD" -- sh -c "
-    echo 'Dropping existing database...'
-    psql -U admin -d postgres -c 'DROP DATABASE IF EXISTS n8n;'
+  kubectl exec -i -n "$NAMESPACE" "$POSTGRES_POD" -- psql -U admin -d n8n
 
-    echo 'Creating fresh database...'
-    psql -U admin -d postgres -c 'CREATE DATABASE n8n OWNER admin;'
-
-    echo 'Restoring from snapshot...'
-    psql -U admin -d n8n
-
-    echo 'Database restored successfully!'
-  "
+echo "Database restored successfully!"
 
 # Clean up temp file
 kubectl exec -n n8n-system deploy/backup-storage -- rm -f /backups/restore-temp.sql

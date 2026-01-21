@@ -18,7 +18,12 @@ export default function Home() {
   const { data: deployments, isLoading: isLoadingDeployments, isFetching, refetch } = useQuery({
     queryKey: ['deployments'],
     queryFn: api.getDeployments,
-    refetchInterval: 5000, // Poll every 5s for deployment status updates
+    // Smart polling: 5s when pending deployments exist, 15s when all stable
+    refetchInterval: (query) => {
+      const data = query.state.data
+      const hasPending = data?.some((d: { status: string }) => d.status === 'pending')
+      return hasPending ? 5000 : 15000
+    },
   })
 
   const { data: snapshots, isLoading: isLoadingSnapshots } = useQuery({

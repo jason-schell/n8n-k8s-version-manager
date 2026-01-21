@@ -15,10 +15,11 @@ async def get_infrastructure_status():
         result = subprocess.run(
             ["kubectl", "get", "pods", "-n", "n8n-system", "-l", "app=redis", "-o", "jsonpath={.items[0].status.phase}"],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=5
         )
         redis_healthy = result.returncode == 0 and result.stdout.strip() == "Running"
-    except:
+    except (subprocess.TimeoutExpired, Exception):
         pass
 
     try:
@@ -26,10 +27,11 @@ async def get_infrastructure_status():
         result = subprocess.run(
             ["kubectl", "get", "pods", "-n", "n8n-system", "-l", "app=backup-storage", "-o", "jsonpath={.items[0].status.phase}"],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=5
         )
         backup_healthy = result.returncode == 0 and result.stdout.strip() == "Running"
-    except:
+    except (subprocess.TimeoutExpired, Exception):
         pass
 
     return {

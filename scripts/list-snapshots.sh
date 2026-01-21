@@ -4,15 +4,10 @@
 
 MODE=${1:-all}
 
-# Helper function to list files using a temporary pod
+# Helper function to list files using the existing backup-storage pod
 list_files() {
   local path=$1
-  # Delete any existing tmp-list pod first
-  kubectl delete pod tmp-list -n n8n-system --ignore-not-found=true >/dev/null 2>&1
-  # Run the listing command, redirecting stderr for cleanup messages only
-  kubectl run tmp-list --rm -i --restart=Never --image=busybox -n n8n-system \
-    --overrides="{\"spec\":{\"containers\":[{\"name\":\"tmp-list\",\"image\":\"busybox\",\"command\":[\"ls\",\"-1\",\"$path\"],\"volumeMounts\":[{\"name\":\"backup\",\"mountPath\":\"/backups\"}]}],\"volumes\":[{\"name\":\"backup\",\"persistentVolumeClaim\":{\"claimName\":\"backup-storage\"}}]}}" \
-    2>&1 | grep -v "^pod.*deleted"
+  kubectl exec -n n8n-system deploy/backup-storage -- ls -1 "$path" 2>/dev/null || true
 }
 
 # List snapshots

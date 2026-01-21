@@ -189,10 +189,64 @@ def build_helm_values(helm_values: HelmValues) -> dict:
     return values
 
 
+def get_namespace_metadata_batch() -> Dict[str, Dict[str, Any]]:
+    """Fetch all n8n namespace metadata in a single kubectl call."""
+    metadata = {}
+    try:
+        result = subprocess.run(
+            ["kubectl", "get", "namespaces", "-l", "app=n8n", "-o", "json"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+            for ns in data.get('items', []):
+                name = ns['metadata']['name']
+                metadata[name] = {
+                    'version': ns['metadata'].get('labels', {}).get('version', 'unknown'),
+                    'created_at': ns['metadata'].get('creationTimestamp')
+                }
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, Exception):
+        pass
+    return metadata
+
+
+def get_helm_values_batch(namespaces: List[str]) -> Dict[str, Dict[str, Any]]:
+    """Fetch helm values for multiple namespaces."""
+    values = {}
+    for ns in namespaces:
+        try:
+            result = subprocess.run(
+                ["helm", "get", "values", ns, "-n", ns, "-o", "json"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                values[ns] = json.loads(result.stdout)
+        except (subprocess.TimeoutExpired, json.JSONDecodeError, Exception):
+            values[ns] = {}
+    return values
+
+
 def parse_versions_output(output: str) -> List[Dict[str, Any]]:
     """Parse list-versions.sh output into structured JSON."""
     versions = []
     lines = output.strip().split('\n')
+
+    # Pre-fetch all namespace metadata in one call
+    ns_metadata = get_namespace_metadata_batch()
+
+    # Collect namespaces first pass
+    namespaces_found = []
+    for line in lines:
+        if line.strip().startswith('Namespace:'):
+            ns = line.split(':', 1)[1].strip()
+            namespaces_found.append(ns)
+
+    # Batch fetch helm values
+    helm_values_cache = get_helm_values_batch(namespaces_found)
 
     current_deployment = {}
     pod_list = []
@@ -227,50 +281,24 @@ def parse_versions_output(output: str) -> List[Dict[str, Any]]:
             if version_match:
                 version = f"{version_match.group(1)}.{version_match.group(2)}.{version_match.group(3)}"
             else:
-                # For custom names, fetch version from namespace label
-                custom_name = namespace  # The namespace IS the custom name
-                try:
-                    result = subprocess.run(
-                        ["kubectl", "get", "namespace", namespace, "-o", "jsonpath={.metadata.labels.version}"],
-                        capture_output=True,
-                        text=True
-                    )
-                    version = result.stdout.strip() or "unknown"
-                except:
-                    version = "unknown"
+                # For custom names, use pre-fetched metadata
+                custom_name = namespace
+                version = ns_metadata.get(namespace, {}).get('version', 'unknown')
 
-            # Get namespace creation timestamp for age calculation
-            created_at = None
-            try:
-                result = subprocess.run(
-                    ["kubectl", "get", "namespace", namespace, "-o", "jsonpath={.metadata.creationTimestamp}"],
-                    capture_output=True,
-                    text=True
-                )
-                created_at = result.stdout.strip() or None
-            except:
-                pass
+            # Use pre-fetched creation timestamp
+            created_at = ns_metadata.get(namespace, {}).get('created_at')
 
             # All deployments now use isolated DB
             isolated_db = True
             snapshot = None
-            try:
-                result = subprocess.run(
-                    ["helm", "get", "values", namespace, "-n", namespace, "-o", "json"],
-                    capture_output=True,
-                    text=True
-                )
-                if result.returncode == 0:
-                    import json
-                    helm_values = json.loads(result.stdout)
-                    if 'database' in helm_values and 'isolated' in helm_values['database']:
-                        snapshot_config = helm_values['database']['isolated'].get('snapshot', {})
-                        if snapshot_config.get('enabled'):
-                            snapshot_name = snapshot_config.get('name', '')
-                            # Remove .sql extension if present
-                            snapshot = snapshot_name.replace('.sql', '') if snapshot_name else None
-            except:
-                pass
+
+            # Use pre-fetched helm values
+            helm_values = helm_values_cache.get(namespace, {})
+            if 'database' in helm_values and 'isolated' in helm_values['database']:
+                snapshot_config = helm_values['database']['isolated'].get('snapshot', {})
+                if snapshot_config.get('enabled'):
+                    snapshot_name = snapshot_config.get('name', '')
+                    snapshot = snapshot_name.replace('.sql', '') if snapshot_name else None
 
             current_deployment = {
                 'version': version,
@@ -332,7 +360,8 @@ async def list_versions():
             ["/workspace/scripts/list-versions.sh"],
             capture_output=True,
             text=True,
-            cwd="/workspace"
+            cwd="/workspace",
+            timeout=30
         )
 
         if result.returncode != 0:
@@ -371,7 +400,7 @@ async def deploy_version(request: DeployRequest):
                     yaml.dump(helm_values_dict, f)
                 cmd.extend(["--values-file", values_file])
 
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd="/workspace")
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd="/workspace", timeout=120)
 
         if result.returncode != 0:
             # Combine stdout and stderr for complete error message
@@ -431,7 +460,8 @@ async def remove_version(namespace: str):
         check_result = subprocess.run(
             ["kubectl", "get", "namespace", namespace],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=5
         )
         if check_result.returncode != 0:
             return {
@@ -444,14 +474,16 @@ async def remove_version(namespace: str):
         subprocess.run(
             ["helm", "uninstall", namespace, "--namespace", namespace],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=30
         )
 
         # Delete namespace
         result = subprocess.run(
             ["kubectl", "delete", "namespace", namespace],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=30
         )
 
         if result.returncode != 0:
@@ -479,7 +511,8 @@ async def check_namespace_status(namespace: str):
         result = subprocess.run(
             ["kubectl", "get", "namespace", namespace],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=5
         )
 
         return {
@@ -498,7 +531,8 @@ async def get_namespace_events(namespace: str, limit: int = 50):
             ["kubectl", "get", "events", "-n", namespace,
              "--sort-by=.lastTimestamp", "-o", "json"],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=10
         )
 
         if result.returncode != 0:
@@ -537,7 +571,8 @@ async def get_namespace_pods(namespace: str):
         result = subprocess.run(
             ["kubectl", "get", "pods", "-n", namespace, "-o", "json"],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=10
         )
 
         if result.returncode != 0:
@@ -593,7 +628,7 @@ async def get_namespace_logs(namespace: str, pod: Optional[str] = None, containe
             if container:
                 cmd.extend(["-c", container])
 
-            log_result = subprocess.run(cmd, capture_output=True, text=True)
+            log_result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             return {
                 "logs": [{
                     "pod": pod,
@@ -607,7 +642,8 @@ async def get_namespace_logs(namespace: str, pod: Optional[str] = None, containe
         pods_result = subprocess.run(
             ["kubectl", "get", "pods", "-n", namespace, "-o", "jsonpath={.items[*].metadata.name}"],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=10
         )
 
         if not pods_result.stdout.strip():
@@ -619,7 +655,7 @@ async def get_namespace_logs(namespace: str, pod: Optional[str] = None, containe
             if container:
                 cmd.extend(["-c", container])
 
-            log_result = subprocess.run(cmd, capture_output=True, text=True)
+            log_result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             logs.append({
                 "pod": pod_name,
                 "container": container,
@@ -641,7 +677,8 @@ async def get_namespace_config(namespace: str):
         result = subprocess.run(
             ["kubectl", "get", "configmap", "n8n-config", "-n", namespace, "-o", "json"],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=10
         )
 
         if result.returncode != 0:

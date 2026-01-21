@@ -88,23 +88,25 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
 
   const queryClient = useQueryClient()
 
+  // Data is prefetched on page load, so it should be immediately available
   const { data: availableVersions, isLoading: isLoadingVersions } = useQuery({
     queryKey: ['available-versions'],
     queryFn: api.getAvailableVersions,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes - versions rarely change
   })
 
   const { data: clusterResources } = useQuery({
     queryKey: ['cluster-resources'],
     queryFn: api.getClusterResources,
-    refetchInterval: 5000, // Poll every 5s while drawer open
-    enabled: open,
+    staleTime: 5000,
+    refetchInterval: open ? 5000 : false, // Only poll while drawer is open
   })
 
+  // Data is prefetched on page load
   const { data: namedSnapshots, isLoading: isLoadingSnapshots } = useQuery({
     queryKey: ['named-snapshots'],
     queryFn: api.getNamedSnapshots,
-    enabled: open,
+    staleTime: 60000, // 1 minute
   })
 
   const QUEUE_MODE_MEMORY = 1792

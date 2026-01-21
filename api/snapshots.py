@@ -1,8 +1,10 @@
 import subprocess
 import re
+import tempfile
+import os
 from datetime import datetime
 from typing import List, Dict
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/snapshots", tags=["snapshots"])
@@ -10,6 +12,11 @@ router = APIRouter(prefix="/api/snapshots", tags=["snapshots"])
 
 class RestoreRequest(BaseModel):
     snapshot: str
+
+
+class RestoreToDeploymentRequest(BaseModel):
+    snapshot: str
+    namespace: str
 
 
 class CreateNamedSnapshotRequest(BaseModel):
@@ -147,6 +154,42 @@ async def restore_snapshot(request: RestoreRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/restore-to-deployment")
+async def restore_to_deployment(request: RestoreToDeploymentRequest):
+    """Restore snapshot to a specific deployment's isolated database."""
+    try:
+        # Validate namespace format
+        if '/' in request.namespace or '..' in request.namespace:
+            return {
+                "success": False,
+                "error": "Invalid namespace"
+            }
+
+        result = subprocess.run(
+            ["/workspace/scripts/restore-to-deployment.sh", request.snapshot, request.namespace],
+            capture_output=True,
+            text=True,
+            cwd="/workspace"
+        )
+
+        if result.returncode != 0:
+            return {
+                "success": False,
+                "message": "Restore failed",
+                "error": result.stderr,
+                "output": result.stdout
+            }
+
+        return {
+            "success": True,
+            "message": f"Snapshot {request.snapshot} restored to {request.namespace}",
+            "output": result.stdout
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/create")
 async def create_snapshot():
     """Create manual database snapshot."""
@@ -246,3 +289,96 @@ async def delete_snapshot(filename: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Max file size: 500MB
+MAX_UPLOAD_SIZE = 500 * 1024 * 1024
+
+
+@router.post("/upload")
+async def upload_snapshot(
+    file: UploadFile = File(...),
+    name: str = Form(...)
+):
+    """Upload a SQL snapshot file."""
+    temp_file = None
+    try:
+        # Validate name
+        if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+            return {
+                "success": False,
+                "error": "Invalid name. Use only letters, numbers, hyphens, and underscores"
+            }
+
+        # Validate file extension
+        if not file.filename or not file.filename.endswith('.sql'):
+            return {
+                "success": False,
+                "error": "File must be a .sql file"
+            }
+
+        # Read file content with size check
+        content = await file.read()
+        if len(content) > MAX_UPLOAD_SIZE:
+            return {
+                "success": False,
+                "error": f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024*1024)}MB"
+            }
+
+        if len(content) == 0:
+            return {
+                "success": False,
+                "error": "File is empty"
+            }
+
+        # Write to temp file
+        fd, temp_file = tempfile.mkstemp(suffix='.sql')
+        with os.fdopen(fd, 'wb') as f:
+            f.write(content)
+
+        # Copy to backup storage via kubectl cp to the postgres pod in n8n-system
+        # First, get the postgres pod name
+        pod_result = subprocess.run(
+            ["kubectl", "get", "pods", "-n", "n8n-system", "-l", "app=postgres",
+             "-o", "jsonpath={.items[0].metadata.name}"],
+            capture_output=True,
+            text=True
+        )
+
+        if pod_result.returncode != 0 or not pod_result.stdout.strip():
+            return {
+                "success": False,
+                "error": "Could not find postgres pod in n8n-system"
+            }
+
+        postgres_pod = pod_result.stdout.strip()
+        dest_path = f"/backups/snapshots/{name}.sql"
+
+        # Copy file to pod
+        cp_result = subprocess.run(
+            ["kubectl", "cp", temp_file, f"n8n-system/{postgres_pod}:{dest_path}"],
+            capture_output=True,
+            text=True
+        )
+
+        if cp_result.returncode != 0:
+            return {
+                "success": False,
+                "error": f"Failed to copy file to storage: {cp_result.stderr}"
+            }
+
+        return {
+            "success": True,
+            "message": f"Snapshot '{name}' uploaded successfully",
+            "filename": f"{name}.sql"
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    finally:
+        # Clean up temp file
+        if temp_file and os.path.exists(temp_file):
+            os.unlink(temp_file)

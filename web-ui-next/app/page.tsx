@@ -18,11 +18,27 @@ export default function Home() {
   const { data: deployments, isLoading: isLoadingDeployments, isFetching, refetch } = useQuery({
     queryKey: ['deployments'],
     queryFn: api.getDeployments,
+    refetchInterval: 5000, // Poll every 5s for deployment status updates
   })
 
   const { data: snapshots, isLoading: isLoadingSnapshots } = useQuery({
     queryKey: ['snapshots'],
     queryFn: api.getSnapshots,
+    staleTime: 30000, // Snapshots don't change often
+    refetchInterval: 30000, // Poll every 30s
+  })
+
+  // Prefetch data needed for deploy drawer - loads in background on page load
+  useQuery({
+    queryKey: ['available-versions'],
+    queryFn: api.getAvailableVersions,
+    staleTime: 5 * 60 * 1000, // 5 minutes - versions rarely change
+  })
+
+  useQuery({
+    queryKey: ['named-snapshots'],
+    queryFn: api.getNamedSnapshots,
+    staleTime: 60000, // 1 minute
   })
 
   return (
@@ -75,12 +91,12 @@ export default function Home() {
             </Button>
           </CardHeader>
           <CardContent>
-            <DeploymentsTable />
+            <DeploymentsTable deployments={deployments} isLoading={isLoadingDeployments} />
           </CardContent>
         </Card>
 
         {/* Snapshots Panel */}
-        <SnapshotsPanel />
+        <SnapshotsPanel snapshots={snapshots} isLoading={isLoadingSnapshots} />
       </main>
 
       <DeployDrawer open={deployDrawerOpen} onOpenChange={setDeployDrawerOpen} />

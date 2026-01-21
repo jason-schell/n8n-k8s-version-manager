@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import {
   Table,
@@ -41,7 +41,6 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Deployment } from '@/lib/types'
-import { ChangeDatabaseDialog } from './change-database-dialog'
 import { CreateSnapshotDialog } from './create-snapshot-dialog'
 import { DeploymentDetailsDrawer } from './deployment-details-drawer'
 
@@ -65,18 +64,16 @@ function formatAge(isoDate: string | undefined): string {
   return `${diffSecs}s`
 }
 
-export function DeploymentsTable() {
+interface DeploymentsTableProps {
+  deployments: Deployment[] | undefined
+  isLoading: boolean
+}
+
+export function DeploymentsTable({ deployments, isLoading }: DeploymentsTableProps) {
   const [deploymentToDelete, setDeploymentToDelete] = useState<Deployment | null>(null)
-  const [deploymentToChangeDb, setDeploymentToChangeDb] = useState<Deployment | null>(null)
   const [deploymentToView, setDeploymentToView] = useState<Deployment | null>(null)
   const [deploymentToSnapshot, setDeploymentToSnapshot] = useState<Deployment | null>(null)
   const queryClient = useQueryClient()
-
-  const { data: deployments, isLoading } = useQuery({
-    queryKey: ['deployments'],
-    queryFn: api.getDeployments,
-    refetchInterval: 5000, // Poll every 5s
-  })
 
   const deleteMutation = useMutation({
     mutationFn: (namespace: string) => api.deleteDeployment(namespace),
@@ -308,12 +305,6 @@ export function DeploymentsTable() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <ChangeDatabaseDialog
-        deployment={deploymentToChangeDb}
-        open={!!deploymentToChangeDb}
-        onOpenChange={(open) => !open && setDeploymentToChangeDb(null)}
-      />
 
       <DeploymentDetailsDrawer
         deployment={deploymentToView}

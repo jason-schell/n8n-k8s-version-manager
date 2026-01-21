@@ -19,7 +19,8 @@ export function Sidebar() {
   const { data: infrastructure, isLoading } = useQuery({
     queryKey: ['infrastructure'],
     queryFn: api.getInfrastructureStatus,
-    refetchInterval: 10000, // Poll every 10s
+    staleTime: 30000, // Infrastructure rarely changes
+    refetchInterval: 30000, // Poll every 30s (reduced from 10s)
   })
 
   const navItems = [

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,75 +10,23 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { CameraIcon, DatabaseIcon, RotateCcwIcon, LoaderIcon } from 'lucide-react'
+import { DatabaseIcon, RotateCcwIcon, UploadIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { useState } from 'react'
-import { CreateNamedSnapshotDialog } from './create-named-snapshot-dialog'
+import { RestoreSnapshotDialog } from './restore-snapshot-dialog'
+import { UploadSnapshotDialog } from './upload-snapshot-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
+import type { Snapshot } from '@/lib/types'
 
-export function SnapshotsPanel() {
+interface SnapshotsPanelProps {
+  snapshots: Snapshot[] | undefined
+  isLoading: boolean
+}
+
+export function SnapshotsPanel({ snapshots, isLoading }: SnapshotsPanelProps) {
   const [restoreSnapshot, setRestoreSnapshot] = useState<string | null>(null)
-  const [createNamedOpen, setCreateNamedOpen] = useState(false)
+  const [uploadOpen, setUploadOpen] = useState(false)
   const queryClient = useQueryClient()
-
-  const { data: snapshots, isLoading } = useQuery({
-    queryKey: ['snapshots'],
-    queryFn: api.getSnapshots,
-    refetchInterval: 10000, // Poll every 10s
-  })
-
-  const createMutation = useMutation({
-    mutationFn: api.createSnapshot,
-    onSuccess: (data) => {
-      if (data.success) {
-        toast.success('Snapshot creation started', {
-          description: 'Snapshot will appear in list when complete',
-        })
-        queryClient.invalidateQueries({ queryKey: ['snapshots'] })
-      } else {
-        toast.error('Failed to create snapshot', {
-          description: data.error,
-        })
-      }
-    },
-    onError: (error: Error) => {
-      toast.error('Failed to create snapshot', {
-        description: error.message,
-      })
-    },
-  })
-
-  const restoreMutation = useMutation({
-    mutationFn: (filename: string) => api.restoreSnapshot(filename),
-    onSuccess: (data) => {
-      if (data.success) {
-        toast.success('Snapshot restored successfully', {
-          description: 'Database has been restored from snapshot',
-        })
-      } else {
-        toast.error('Failed to restore snapshot', {
-          description: data.error,
-        })
-      }
-      setRestoreSnapshot(null)
-    },
-    onError: (error: Error) => {
-      toast.error('Failed to restore snapshot', {
-        description: error.message,
-      })
-      setRestoreSnapshot(null)
-    },
-  })
 
   const deleteMutation = useMutation({
     mutationFn: (filename: string) => api.deleteSnapshot(filename),
@@ -103,12 +51,6 @@ export function SnapshotsPanel() {
     setRestoreSnapshot(filename)
   }
 
-  const confirmRestore = () => {
-    if (restoreSnapshot) {
-      restoreMutation.mutate(restoreSnapshot)
-    }
-  }
-
   const namedSnapshots = snapshots?.filter((s) => s.type === 'named') || []
   const autoSnapshots = snapshots?.filter((s) => s.type === 'auto') || []
 
@@ -122,33 +64,14 @@ export function SnapshotsPanel() {
               {snapshots?.length || 0} snapshots available
             </CardDescription>
           </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => setCreateNamedOpen(true)}
-              variant="outline"
-              size="sm"
-            >
-              <CameraIcon className="h-4 w-4 mr-2" />
-              Create Named
-            </Button>
-            <Button
-              onClick={() => createMutation.mutate()}
-              disabled={createMutation.isPending}
-              size="sm"
-            >
-              {createMutation.isPending ? (
-                <>
-                  <LoaderIcon className="h-4 w-4 mr-2 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <CameraIcon className="h-4 w-4 mr-2" />
-                  Quick Snapshot
-                </>
-              )}
-            </Button>
-          </div>
+          <Button
+            onClick={() => setUploadOpen(true)}
+            variant="outline"
+            size="sm"
+          >
+            <UploadIcon className="h-4 w-4 mr-2" />
+            Upload
+          </Button>
         </CardHeader>
         <CardContent>
           <Accordion type="single" collapsible>
@@ -276,37 +199,17 @@ export function SnapshotsPanel() {
         </CardContent>
       </Card>
 
-      {/* Restore Confirmation Dialog */}
-      <AlertDialog open={!!restoreSnapshot} onOpenChange={() => setRestoreSnapshot(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Restore snapshot?</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>This will OVERWRITE the current database with:</p>
-              <p className="font-mono text-sm bg-muted p-2 rounded">
-                {restoreSnapshot}
-              </p>
-              <p className="text-destructive font-medium">
-                This action cannot be undone!
-              </p>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmRestore}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              Restore
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Restore to Deployment Dialog */}
+      <RestoreSnapshotDialog
+        snapshot={restoreSnapshot}
+        open={!!restoreSnapshot}
+        onOpenChange={(open) => !open && setRestoreSnapshot(null)}
+      />
 
-      {/* Create Named Snapshot Dialog */}
-      <CreateNamedSnapshotDialog
-        open={createNamedOpen}
-        onOpenChange={setCreateNamedOpen}
+      {/* Upload Snapshot Dialog */}
+      <UploadSnapshotDialog
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
       />
     </>
   )

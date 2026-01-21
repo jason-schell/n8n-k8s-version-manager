@@ -1,4 +1,4 @@
-{{- if and .Values.isolatedDB .Values.database.isolated.snapshot.enabled }}
+{{- if .Values.database.snapshot.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -35,7 +35,7 @@ spec:
         - |
           set -e
 
-          SNAPSHOT_FILE="/snapshots/{{ .Values.database.isolated.snapshot.name }}"
+          SNAPSHOT_FILE="/snapshots/{{ .Values.database.snapshot.name }}"
 
           if [ ! -f "$SNAPSHOT_FILE" ]; then
             echo "ERROR: Snapshot not found: $SNAPSHOT_FILE"
@@ -44,7 +44,7 @@ spec:
             exit 1
           fi
 
-          echo "Restoring snapshot: {{ .Values.database.isolated.snapshot.name }}"
+          echo "Restoring snapshot: {{ .Values.database.snapshot.name }}"
           echo "Target database: postgres-{{ .Release.Name }}.{{ .Release.Namespace }}.svc.cluster.local"
 
           # Restore snapshot to isolated database

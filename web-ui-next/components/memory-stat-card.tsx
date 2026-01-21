@@ -17,7 +17,8 @@ export function MemoryStatCard() {
   const { data: resources, isLoading } = useQuery({
     queryKey: ['cluster-resources'],
     queryFn: api.getClusterResources,
-    refetchInterval: 10000, // Poll every 10s
+    staleTime: 15000, // Memory data valid for 15s
+    refetchInterval: 15000, // Poll every 15s (reduced from 10s)
   })
 
   if (isLoading || !resources?.memory) {

@@ -29,6 +29,11 @@ export interface CreateNamedSnapshotRequest {
   source?: string
 }
 
+export interface RestoreToDeploymentRequest {
+  snapshot: string
+  namespace: string
+}
+
 export interface SnapshotActionResponse {
   success: boolean
   message?: string
@@ -209,4 +214,9 @@ export interface PodsResponse {
 
 export interface LogsResponse {
   logs: PodLogs[]
+}
+
+export interface ConfigResponse {
+  config: Record<string, string>
+  error?: string
 }

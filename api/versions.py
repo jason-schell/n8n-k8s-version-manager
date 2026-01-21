@@ -631,3 +631,28 @@ async def get_namespace_logs(namespace: str, pod: Optional[str] = None, containe
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{namespace}/config")
+async def get_namespace_config(namespace: str):
+    """Get ConfigMap environment variables for a namespace."""
+    try:
+        # Get the n8n-config ConfigMap directly by name
+        result = subprocess.run(
+            ["kubectl", "get", "configmap", "n8n-config", "-n", namespace, "-o", "json"],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            return {"config": {}, "error": result.stderr}
+
+        data = json.loads(result.stdout)
+        config = data.get("data", {})
+
+        return {"config": config}
+
+    except json.JSONDecodeError:
+        return {"config": {}}
+    except Exception as e:
+        return {"config": {}, "error": str(e)}

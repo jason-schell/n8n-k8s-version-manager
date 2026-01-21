@@ -8,11 +8,13 @@ import type {
   ClusterResources,
   SnapshotListResponse,
   CreateNamedSnapshotRequest,
+  RestoreToDeploymentRequest,
   SnapshotActionResponse,
   NamespaceStatus,
   EventsResponse,
   PodsResponse,
   LogsResponse,
+  ConfigResponse,
 } from './types'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -85,6 +87,13 @@ export const api = {
     })
   },
 
+  async restoreToDeployment(request: RestoreToDeploymentRequest): Promise<SnapshotActionResponse> {
+    return fetchApi('/api/snapshots/restore-to-deployment', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  },
+
   async createNamedSnapshot(request: CreateNamedSnapshotRequest): Promise<SnapshotActionResponse> {
     return fetchApi('/api/snapshots/create-named', {
       method: 'POST',
@@ -96,6 +105,24 @@ export const api = {
     return fetchApi(`/api/snapshots/${filename}`, {
       method: 'DELETE',
     })
+  },
+
+  async uploadSnapshot(file: File, name: string): Promise<SnapshotActionResponse> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('name', name)
+
+    const response = await fetch(`${API_URL}/api/snapshots/upload`, {
+      method: 'POST',
+      body: formData,
+      // Don't set Content-Type header - browser sets it with boundary for multipart
+    })
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.statusText}`)
+    }
+
+    return response.json()
   },
 
   async createSnapshotFromDeployment(namespace: string, name?: string): Promise<SnapshotActionResponse> {
@@ -144,5 +171,9 @@ export const api = {
     if (pod) params.append('pod', pod)
     if (container) params.append('container', container)
     return fetchApi(`/api/versions/${namespace}/logs?${params}`)
+  },
+
+  async getNamespaceConfig(namespace: string): Promise<ConfigResponse> {
+    return fetchApi(`/api/versions/${namespace}/config`)
   },
 }

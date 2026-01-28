@@ -45,6 +45,7 @@ import {
   CheckIcon,
   ExternalLinkIcon,
   AlertTriangleIcon,
+  RefreshCwIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -89,7 +90,7 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
   const queryClient = useQueryClient()
 
   // Data is prefetched on page load, so it should be immediately available
-  const { data: availableVersions, isLoading: isLoadingVersions } = useQuery({
+  const { data: availableVersions, isLoading: isLoadingVersions, isFetching: isFetchingVersions, refetch: refetchVersions } = useQuery({
     queryKey: ['available-versions'],
     queryFn: api.getAvailableVersions,
     staleTime: 5 * 60 * 1000, // 5 minutes - versions rarely change
@@ -285,72 +286,83 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
           {/* Version Selection */}
           <div className="space-y-2">
             <Label>Version</Label>
-            <Popover open={versionPopoverOpen} onOpenChange={setVersionPopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={versionPopoverOpen}
-                  className="w-full justify-between"
-                >
-                  {version || 'Select version...'}
-                  <ChevronsUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0" align="start">
-                <Command shouldFilter={false}>
-                  <CommandInput
-                    placeholder="Search versions..."
-                    value={searchQuery}
-                    onValueChange={setSearchQuery}
-                  />
-                  <CommandList>
-                    {isLoadingVersions || isSearching ? (
-                      <div className="p-4 space-y-2">
-                        {Array(4)
-                          .fill(0)
-                          .map((_, i) => (
-                            <Skeleton key={i} className="h-8 w-full" />
-                          ))}
-                      </div>
-                    ) : filteredVersions.length === 0 ? (
-                      <CommandEmpty>No version found.</CommandEmpty>
-                    ) : (
-                      <CommandGroup>
-                        {filteredVersions.map((v) => (
-                          <CommandItem
-                            key={v}
-                            value={v}
-                            onSelect={(currentValue) => {
-                              setVersion(currentValue)
-                              setVersionPopoverOpen(false)
-                              setSearchQuery('')
-                            }}
-                          >
-                            <CheckIcon
-                              className={cn(
-                                'mr-2 h-4 w-4',
-                                version === v ? 'opacity-100' : 'opacity-0'
-                              )}
-                            />
-                            <span className="flex-1">{v}</span>
-                            <a
-                              href={`https://github.com/n8n-io/n8n/releases/tag/n8n@${v}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-muted-foreground hover:text-foreground"
+            <div className="flex gap-2">
+              <Popover open={versionPopoverOpen} onOpenChange={setVersionPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={versionPopoverOpen}
+                    className="flex-1 justify-between"
+                  >
+                    {version || 'Select version...'}
+                    <ChevronsUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Search versions..."
+                      value={searchQuery}
+                      onValueChange={setSearchQuery}
+                    />
+                    <CommandList>
+                      {isLoadingVersions || isSearching ? (
+                        <div className="p-4 space-y-2">
+                          {Array(4)
+                            .fill(0)
+                            .map((_, i) => (
+                              <Skeleton key={i} className="h-8 w-full" />
+                            ))}
+                        </div>
+                      ) : filteredVersions.length === 0 ? (
+                        <CommandEmpty>No version found.</CommandEmpty>
+                      ) : (
+                        <CommandGroup>
+                          {filteredVersions.map((v) => (
+                            <CommandItem
+                              key={v}
+                              value={v}
+                              onSelect={(currentValue) => {
+                                setVersion(currentValue)
+                                setVersionPopoverOpen(false)
+                                setSearchQuery('')
+                              }}
                             >
-                              <ExternalLinkIcon className="h-3 w-3" />
-                            </a>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+                              <CheckIcon
+                                className={cn(
+                                  'mr-2 h-4 w-4',
+                                  version === v ? 'opacity-100' : 'opacity-0'
+                                )}
+                              />
+                              <span className="flex-1">{v}</span>
+                              <a
+                                href={`https://github.com/n8n-io/n8n/releases/tag/n8n@${v}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-muted-foreground hover:text-foreground"
+                              >
+                                <ExternalLinkIcon className="h-3 w-3" />
+                              </a>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => refetchVersions()}
+                disabled={isFetchingVersions}
+                title="Refresh versions from GitHub"
+              >
+                <RefreshCwIcon className={cn("h-4 w-4", isFetchingVersions && "animate-spin")} />
+              </Button>
+            </div>
             <p className="text-xs text-muted-foreground">
               Search or select from all available releases
             </p>

@@ -15,6 +15,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { RefreshButton } from '@/components/refresh-button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -24,7 +25,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  RefreshCwIcon,
   CheckCircleIcon,
   AlertCircleIcon,
   ClockIcon,
@@ -38,7 +38,6 @@ import {
   AlertTriangleIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
 
 interface DeploymentDetailsDrawerProps {
   deployment: Deployment | null
@@ -133,15 +132,7 @@ function StatusTab({ namespace, enabled }: { namespace: string; enabled: boolean
           <span className="text-sm text-muted-foreground">
             {pods.length} pod{pods.length !== 1 ? 's' : ''}
           </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isFetching}
-          >
-            <RefreshCwIcon className={cn("h-4 w-4 mr-1", isFetching && "animate-spin")} />
-            Refresh
-          </Button>
+          <RefreshButton onClick={() => refetch()} isLoading={isFetching} />
         </div>
 
         {pods.length === 0 ? (
@@ -295,15 +286,7 @@ function EventsTab({ namespace, enabled }: { namespace: string; enabled: boolean
         <span className="text-sm text-muted-foreground">
           {events.length} event{events.length !== 1 ? 's' : ''}
         </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-        >
-          <RefreshCwIcon className={cn("h-4 w-4 mr-1", isFetching && "animate-spin")} />
-          Refresh
-        </Button>
+        <RefreshButton onClick={() => refetch()} isLoading={isFetching} />
       </div>
 
       {events.length === 0 ? (
@@ -424,16 +407,7 @@ function LogsTab({ namespace, enabled }: { namespace: string; enabled: boolean }
           </Select>
         )}
 
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="ml-auto"
-        >
-          <RefreshCwIcon className={cn("h-4 w-4 mr-1", isFetching && "animate-spin")} />
-          Refresh
-        </Button>
+        <RefreshButton onClick={() => refetch()} isLoading={isFetching} className="ml-auto" />
       </div>
 
       {isLoading ? (
@@ -508,15 +482,7 @@ function ConfigTab({ namespace, enabled }: { namespace: string; enabled: boolean
         <span className="text-sm text-muted-foreground">
           {entries.length} variable{entries.length !== 1 ? 's' : ''}
         </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-        >
-          <RefreshCwIcon className={cn("h-4 w-4 mr-1", isFetching && "animate-spin")} />
-          Refresh
-        </Button>
+        <RefreshButton onClick={() => refetch()} isLoading={isFetching} />
       </div>
 
       {entries.length === 0 ? (

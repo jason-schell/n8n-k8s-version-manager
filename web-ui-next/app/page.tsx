@@ -9,7 +9,8 @@ import { DeployDrawer } from '@/components/deploy-drawer'
 import { SnapshotsPanel } from '@/components/snapshots-panel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { PlusIcon, PackageIcon, DatabaseIcon, RefreshCwIcon } from 'lucide-react'
+import { PlusIcon, PackageIcon, DatabaseIcon } from 'lucide-react'
+import { RefreshButton } from '@/components/refresh-button'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { QUERY_CONFIG } from '@/lib/query-config'
@@ -89,15 +90,7 @@ export default function Home() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle>Active Deployments</CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => refetch()}
-              disabled={isFetching}
-            >
-              <RefreshCwIcon className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
+            <RefreshButton onClick={() => refetch()} isLoading={isFetching} variant="outline" />
           </CardHeader>
           <CardContent>
             <DeploymentsTable deployments={deployments} isLoading={isLoadingDeployments} />

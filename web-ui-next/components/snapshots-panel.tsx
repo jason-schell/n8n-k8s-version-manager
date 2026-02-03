@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/accordion'
 import { DatabaseIcon, RotateCcwIcon, UploadIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { RestoreSnapshotDialog } from './restore-snapshot-dialog'
 import { UploadSnapshotDialog } from './upload-snapshot-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -29,7 +29,15 @@ interface SnapshotsPanelProps {
 export function SnapshotsPanel({ snapshots, isLoading, isError, onRetry }: SnapshotsPanelProps) {
   const [restoreSnapshot, setRestoreSnapshot] = useState<string | null>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [accordionValue, setAccordionValue] = useState<string | undefined>(undefined)
   const queryClient = useQueryClient()
+
+  // Auto-expand accordion when few snapshots exist
+  useEffect(() => {
+    if (snapshots && snapshots.length > 0 && snapshots.length <= 5) {
+      setAccordionValue('snapshots')
+    }
+  }, [snapshots])
 
   const deleteMutation = useMutation({
     mutationFn: (filename: string) => api.deleteSnapshot(filename),
@@ -77,7 +85,7 @@ export function SnapshotsPanel({ snapshots, isLoading, isError, onRetry }: Snaps
           </Button>
         </CardHeader>
         <CardContent>
-          <Accordion type="single" collapsible>
+          <Accordion type="single" collapsible value={accordionValue} onValueChange={setAccordionValue}>
             <AccordionItem value="snapshots" className="border-none">
               <AccordionTrigger className="hover:no-underline">
                 <span className="text-sm">

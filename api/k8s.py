@@ -215,3 +215,69 @@ async def get_configmap(namespace: str, name: str) -> Dict[str, str]:
         if e.status == 404:
             return {}
         handle_api_exception(e, f"configmap {name}")
+
+
+# =============================================================================
+# Cluster Resource Operations
+# =============================================================================
+
+def parse_k8s_memory(mem_str: str) -> int:
+    """Parse Kubernetes memory string (e.g., '1Gi', '512Mi') to bytes."""
+    if not mem_str:
+        return 0
+    mem_str = str(mem_str)
+    multipliers = {
+        'Ki': 1024,
+        'Mi': 1024 ** 2,
+        'Gi': 1024 ** 3,
+        'Ti': 1024 ** 4,
+        'K': 1000,
+        'M': 1000 ** 2,
+        'G': 1000 ** 3,
+        'T': 1000 ** 4,
+    }
+    for suffix, mult in multipliers.items():
+        if mem_str.endswith(suffix):
+            return int(float(mem_str[:-len(suffix)]) * mult)
+    try:
+        return int(mem_str)
+    except ValueError:
+        return 0
+
+
+async def get_cluster_allocatable_memory() -> Optional[int]:
+    """Get total allocatable memory in bytes from first node."""
+    api = await get_client()
+    v1 = client.CoreV1Api(api)
+    try:
+        nodes = await v1.list_node()
+        if nodes.items:
+            mem_str = nodes.items[0].status.allocatable.get("memory", "0")
+            return parse_k8s_memory(mem_str)
+        return None
+    except ApiException:
+        return None
+
+
+async def get_total_memory_requests() -> int:
+    """Get total memory requests across all pods in bytes."""
+    pods = await list_pods(all_namespaces=True)
+    total = 0
+    for pod in pods:
+        if pod.spec and pod.spec.containers:
+            for container in pod.spec.containers:
+                if container.resources and container.resources.requests:
+                    mem_str = container.resources.requests.get("memory", "0")
+                    total += parse_k8s_memory(mem_str)
+    return total
+
+
+async def check_cluster_health() -> bool:
+    """Check if we can connect to the K8s API server."""
+    try:
+        api = await get_client()
+        v1 = client.VersionApi(api)
+        await v1.get_code()
+        return True
+    except Exception:
+        return False

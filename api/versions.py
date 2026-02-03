@@ -7,7 +7,7 @@ import yaml
 import json
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 router = APIRouter(prefix="/api/versions", tags=["versions"])
 
@@ -83,6 +83,41 @@ class DeployRequest(BaseModel):
     name: Optional[str] = None  # Optional custom namespace name
     snapshot: Optional[str] = None  # Optional snapshot name for isolated DB
     helm_values: Optional[HelmValues] = None
+
+    @field_validator('version')
+    @classmethod
+    def validate_version(cls, v: str) -> str:
+        import re
+        if not re.match(r'^\d+\.\d+\.\d+$', v):
+            raise ValueError('Version must be in format major.minor.patch (e.g., 1.85.0)')
+        return v
+
+    @field_validator('mode')
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        if v not in ('queue', 'regular'):
+            raise ValueError('Mode must be "queue" or "regular"')
+        return v
+
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        import re
+        if not re.match(r'^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$', v):
+            raise ValueError('Name must be valid Kubernetes namespace (lowercase, alphanumeric, hyphens)')
+        return v
+
+    @field_validator('snapshot')
+    @classmethod
+    def validate_snapshot(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        import re
+        if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9_-]*$', v):
+            raise ValueError('Snapshot name must be alphanumeric with hyphens/underscores')
+        return v
 
 
 def deep_merge(base: dict, override: dict) -> dict:

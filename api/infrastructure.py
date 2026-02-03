@@ -18,11 +18,9 @@ async def get_infrastructure_status():
 
     return {
         "redis": {
-            "healthy": redis_phase == "Running",
             "status": "healthy" if redis_phase == "Running" else "unavailable"
         },
         "backup": {
-            "healthy": backup_phase == "Running",
             "status": "healthy" if backup_phase == "Running" else "unavailable"
         }
     }

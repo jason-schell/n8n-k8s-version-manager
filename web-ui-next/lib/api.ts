@@ -29,7 +29,23 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
   })
 
   if (!response.ok) {
-    throw new Error(`API error: ${response.statusText}`)
+    // Try to extract error detail from response body
+    let errorMessage = response.statusText
+    try {
+      const errorBody = await response.json()
+      if (errorBody.detail) {
+        // Handle both string detail and Pydantic validation array
+        if (typeof errorBody.detail === 'string') {
+          errorMessage = errorBody.detail
+        } else if (Array.isArray(errorBody.detail)) {
+          // Pydantic validation error - extract first message
+          errorMessage = errorBody.detail[0]?.msg || response.statusText
+        }
+      }
+    } catch {
+      // If we can't parse the body, use statusText
+    }
+    throw new Error(errorMessage)
   }
 
   return response.json()
@@ -119,7 +135,18 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.statusText}`)
+      let errorMessage = response.statusText
+      try {
+        const errorBody = await response.json()
+        if (errorBody.detail) {
+          errorMessage = typeof errorBody.detail === 'string'
+            ? errorBody.detail
+            : errorBody.detail[0]?.msg || response.statusText
+        }
+      } catch {
+        // Use statusText if body can't be parsed
+      }
+      throw new Error(errorMessage)
     }
 
     return response.json()

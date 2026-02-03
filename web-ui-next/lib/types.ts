@@ -158,17 +158,6 @@ export interface HelmValues {
   rawYaml?: string
 }
 
-// Legacy interface - kept for backward compatibility
-export interface CustomValues {
-  envVars?: EnvVar[]
-  resources?: {
-    cpu?: string
-    memory?: string
-  }
-  workerReplicas?: number
-  rawYaml?: string
-}
-
 // K8s Observability types
 export interface K8sEvent {
   type: 'Normal' | 'Warning'

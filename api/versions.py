@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
 from validation import validate_namespace, validate_identifier
+import k8s
 
 router = APIRouter(prefix="/api/versions", tags=["versions"])
 
@@ -225,25 +226,18 @@ def build_helm_values(helm_values: HelmValues) -> dict:
     return values
 
 
-def get_namespace_metadata_batch() -> Dict[str, Dict[str, Any]]:
-    """Fetch all n8n namespace metadata in a single kubectl call."""
+async def get_namespace_metadata_batch() -> Dict[str, Dict[str, Any]]:
+    """Fetch all n8n namespace metadata using k8s module."""
     metadata = {}
     try:
-        result = subprocess.run(
-            ["kubectl", "get", "namespaces", "-l", "app=n8n", "-o", "json"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        if result.returncode == 0:
-            data = json.loads(result.stdout)
-            for ns in data.get('items', []):
-                name = ns['metadata']['name']
-                metadata[name] = {
-                    'version': ns['metadata'].get('labels', {}).get('version', 'unknown'),
-                    'created_at': ns['metadata'].get('creationTimestamp')
-                }
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, Exception):
+        namespaces = await k8s.list_namespaces(label_selector="app=n8n")
+        for ns in namespaces:
+            name = ns.metadata.name
+            metadata[name] = {
+                'version': ns.metadata.labels.get('version', 'unknown') if ns.metadata.labels else 'unknown',
+                'created_at': ns.metadata.creation_timestamp.isoformat() if ns.metadata.creation_timestamp else None
+            }
+    except Exception:
         pass
     return metadata
 
@@ -266,13 +260,13 @@ def get_helm_values_batch(namespaces: List[str]) -> Dict[str, Dict[str, Any]]:
     return values
 
 
-def parse_versions_output(output: str) -> List[Dict[str, Any]]:
+async def parse_versions_output(output: str) -> List[Dict[str, Any]]:
     """Parse list-versions.sh output into structured JSON."""
     versions = []
     lines = output.strip().split('\n')
 
     # Pre-fetch all namespace metadata in one call
-    ns_metadata = get_namespace_metadata_batch()
+    ns_metadata = await get_namespace_metadata_batch()
 
     # Collect namespaces first pass
     namespaces_found = []
@@ -403,7 +397,7 @@ async def list_versions():
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail=f"Failed to list versions: {result.stderr}")
 
-        versions = parse_versions_output(result.stdout)
+        versions = await parse_versions_output(result.stdout)
         return {"versions": versions}
 
     except FileNotFoundError:
@@ -488,41 +482,23 @@ async def remove_version(namespace: str):
     """Remove a deployed n8n version by namespace."""
     namespace = validate_namespace(namespace)
 
-    try:
-        # Check if namespace exists
-        check_result = subprocess.run(
-            ["kubectl", "get", "namespace", namespace],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        if check_result.returncode != 0:
-            raise HTTPException(status_code=404, detail=f"Namespace {namespace} not found")
+    # Check if namespace exists
+    if not await k8s.namespace_exists(namespace):
+        raise HTTPException(status_code=404, detail=f"Namespace {namespace} not found")
 
-        # Uninstall Helm release (use namespace as release name)
+    try:
+        # Uninstall Helm release first (keep subprocess - no native Helm API)
         helm_result = subprocess.run(
             ["helm", "uninstall", namespace, "--namespace", namespace, "--wait"],
             capture_output=True,
             text=True,
             timeout=60
         )
-        # Log but don't fail if helm release doesn't exist
         if helm_result.returncode != 0 and "not found" not in helm_result.stderr.lower():
             logging.warning(f"Helm uninstall warning: {helm_result.stderr}")
 
         # Delete namespace with wait
-        result = subprocess.run(
-            ["kubectl", "delete", "namespace", namespace, "--wait=true", "--timeout=60s"],
-            capture_output=True,
-            text=True,
-            timeout=90
-        )
-
-        if result.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to delete namespace: {result.stderr}"
-            )
+        await k8s.delete_namespace(namespace, wait=True, timeout=60)
 
         return {
             "success": True,
@@ -532,7 +508,7 @@ async def remove_version(namespace: str):
     except HTTPException:
         raise
     except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="Deletion timed out")
+        raise HTTPException(status_code=504, detail="Helm uninstall timed out")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -541,23 +517,8 @@ async def remove_version(namespace: str):
 async def check_namespace_status(namespace: str):
     """Check if a namespace exists (for polling deletion status)."""
     namespace = validate_namespace(namespace)
-
-    try:
-        result = subprocess.run(
-            ["kubectl", "get", "namespace", namespace],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-
-        return {
-            "exists": result.returncode == 0,
-            "namespace": namespace
-        }
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="Status check timed out")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    exists = await k8s.namespace_exists(namespace)
+    return {"exists": exists, "namespace": namespace}
 
 
 @router.get("/{namespace}/events")

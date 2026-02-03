@@ -2,17 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/sidebar'
-import { StatCard } from '@/components/stat-card'
-import { MemoryStatCard } from '@/components/memory-stat-card'
 import { DeploymentsTable } from '@/components/deployments-table'
 import { DeployDrawer } from '@/components/deploy-drawer'
 import { SnapshotsPanel } from '@/components/snapshots-panel'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { InfrastructureStatus } from '@/components/infrastructure-status'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { PlusIcon, PackageIcon, DatabaseIcon } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { RefreshButton } from '@/components/refresh-button'
+import { Badge } from '@/components/ui/badge'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { QUERY_CONFIG } from '@/lib/query-config'
@@ -22,6 +19,18 @@ function formatLastUpdated(timestamp: number): string {
   if (seconds < 5) return 'just now'
   if (seconds < 60) return `${seconds}s ago`
   return `${Math.floor(seconds / 60)}m ago`
+}
+
+function LiveIndicator({ isFetching }: { isFetching: boolean }) {
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="relative flex h-2 w-2">
+        {isFetching && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />}
+        <span className={`relative inline-flex rounded-full h-2 w-2 ${isFetching ? 'bg-emerald-500' : 'bg-emerald-500/50'}`} />
+      </span>
+      <span>{isFetching ? 'Syncing...' : 'Live'}</span>
+    </div>
+  )
 }
 
 export default function Home() {
@@ -85,46 +94,31 @@ export default function Home() {
         <InfrastructureStatus />
         <main className="flex-1 p-8 space-y-6 overflow-y-auto">
         {/* Hero Section */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">n8n Version Manager</h1>
-            <p className="text-muted-foreground mt-1">
-              {deployments?.length || 0} active deployments
-            </p>
-          </div>
-          <Button size="lg" onClick={() => setDeployDrawerOpen(true)} title="Press N">
-            <PlusIcon className="h-4 w-4 mr-2" />
-            Deploy New Version
-          </Button>
-        </div>
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard
-            label="Active Deployments"
-            value={deployments?.length || 0}
-            icon={<PackageIcon className="h-8 w-8" />}
-            isLoading={isLoadingDeployments}
-          />
-          <StatCard
-            label="Snapshots"
-            value={snapshots?.length || 0}
-            icon={<DatabaseIcon className="h-8 w-8" />}
-            isLoading={isLoadingSnapshots}
-          />
-          <MemoryStatCard />
+        <div>
+          <h1 className="text-3xl font-bold">n8n Version Manager</h1>
+          <p className="text-muted-foreground mt-1">
+            {deployments?.length || 0} active deployments
+          </p>
         </div>
 
         {/* Deployments Table */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle>Active Deployments</CardTitle>
-              {dataUpdatedAt > 0 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Updated {formatLastUpdated(dataUpdatedAt)}
-                </p>
-              )}
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-3">
+                <CardTitle>Deployments</CardTitle>
+                {deployments && deployments.length > 0 && (
+                  <Badge variant="secondary" className="font-normal">
+                    {deployments.length}
+                  </Badge>
+                )}
+              </div>
+              <CardDescription className="flex items-center gap-3">
+                {dataUpdatedAt > 0 && (
+                  <span>Updated {formatLastUpdated(dataUpdatedAt)}</span>
+                )}
+                <LiveIndicator isFetching={isFetching} />
+              </CardDescription>
             </div>
             <RefreshButton onClick={() => refetchDeployments()} isLoading={isFetching} variant="outline" />
           </CardHeader>

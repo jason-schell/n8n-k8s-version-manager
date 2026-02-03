@@ -14,6 +14,13 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Progress } from '@/components/ui/progress'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +45,7 @@ import {
   ClockIcon,
   InfoIcon,
   CameraIcon,
+  ServerIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { addActivity } from '@/lib/activity'
@@ -46,6 +54,41 @@ import { getAgeSeconds, formatAgeFromDate } from '@/lib/format'
 import { CreateSnapshotDialog } from './create-snapshot-dialog'
 import { DeploymentDetailsDrawer } from './deployment-details-drawer'
 import { QueryErrorState } from '@/components/error-boundary'
+
+// Status indicator with animated dot
+function StatusBadge({ status, isDeleting }: { status: string; isDeleting: boolean }) {
+  if (isDeleting) {
+    return (
+      <Badge variant="secondary" className="gap-1.5">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+        </span>
+        deleting
+      </Badge>
+    )
+  }
+
+  const config: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; dotClass: string; pulse?: boolean }> = {
+    running: { variant: 'default', dotClass: 'bg-emerald-500' },
+    starting: { variant: 'secondary', dotClass: 'bg-amber-500', pulse: true },
+    pending: { variant: 'secondary', dotClass: 'bg-amber-500', pulse: true },
+    failed: { variant: 'destructive', dotClass: 'bg-red-500' },
+    unknown: { variant: 'outline', dotClass: 'bg-zinc-400' },
+  }
+
+  const { variant, dotClass, pulse } = config[status] || config.unknown
+
+  return (
+    <Badge variant={variant} className="gap-1.5">
+      <span className={`relative flex h-2 w-2`}>
+        {pulse && <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotClass} opacity-75`} />}
+        <span className={`relative inline-flex rounded-full h-2 w-2 ${dotClass}`} />
+      </span>
+      {status}
+    </Badge>
+  )
+}
 
 interface DeploymentsTableProps {
   deployments: Deployment[] | undefined
@@ -57,6 +100,7 @@ interface DeploymentsTableProps {
 
 export function DeploymentsTable({ deployments, isLoading, isError, onRetry, onDeployClick }: DeploymentsTableProps) {
   const [deploymentToDelete, setDeploymentToDelete] = useState<Deployment | null>(null)
+  const [deletingNamespace, setDeletingNamespace] = useState<string | null>(null)
   const [deploymentToView, setDeploymentToView] = useState<Deployment | null>(null)
   const [deploymentToSnapshot, setDeploymentToSnapshot] = useState<Deployment | null>(null)
   const queryClient = useQueryClient()
@@ -69,18 +113,27 @@ export function DeploymentsTable({ deployments, isLoading, isError, onRetry, onD
       })
       addActivity('deleted', namespace)
       queryClient.invalidateQueries({ queryKey: ['deployments'] })
-      setDeploymentToDelete(null)
+      setDeletingNamespace(null)
     },
-    onError: (error: Error) => {
+    onError: (error: Error, namespace) => {
       toast.error('Failed to delete deployment', {
         description: error.message,
       })
+      setDeletingNamespace(null)
     },
   })
 
   const handleDeleteConfirm = () => {
     if (deploymentToDelete) {
-      deleteMutation.mutate(deploymentToDelete.namespace)
+      const namespace = deploymentToDelete.namespace
+      setDeletingNamespace(namespace)
+      setDeploymentToDelete(null) // Close modal immediately
+      toast.loading(`Deleting ${namespace}...`, { id: `delete-${namespace}` })
+      deleteMutation.mutate(namespace, {
+        onSettled: () => {
+          toast.dismiss(`delete-${namespace}`)
+        }
+      })
     }
   }
 
@@ -142,9 +195,19 @@ export function DeploymentsTable({ deployments, isLoading, isError, onRetry, onD
           ) : deployments?.length === 0 ? (
             // Empty state
             <TableRow>
-              <TableCell colSpan={8} className="h-64 text-center">
-                <p className="text-muted-foreground">No deployments found</p>
-                <Button className="mt-4" onClick={onDeployClick}>Deploy First Version</Button>
+              <TableCell colSpan={8} className="h-72">
+                <div className="flex flex-col items-center justify-center text-center">
+                  <div className="rounded-full bg-muted p-4 mb-4">
+                    <ServerIcon className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                  <h3 className="font-semibold text-lg mb-1">No deployments yet</h3>
+                  <p className="text-muted-foreground text-sm mb-4 max-w-sm">
+                    Deploy your first n8n version to start automating workflows
+                  </p>
+                  <Button onClick={onDeployClick}>
+                    Deploy First Version
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           ) : (
@@ -168,23 +231,11 @@ export function DeploymentsTable({ deployments, isLoading, isError, onRetry, onD
                 </TableCell>
                 <TableCell>
                   {(() => {
+                    const isDeleting = deletingNamespace === d.namespace
                     const ageSeconds = getAgeSeconds(d.created_at)
                     const isStarting = ageSeconds < 90
                     const displayStatus = isStarting ? 'starting' : (d.status || 'unknown')
-                    return (
-                      <Badge
-                        variant={
-                          displayStatus === 'running'
-                            ? 'default'
-                            : displayStatus === 'failed'
-                            ? 'destructive'
-                            : 'secondary'
-                        }
-                      >
-                        <span className="inline-block h-2 w-2 rounded-full bg-current mr-2" />
-                        {displayStatus}
-                      </Badge>
-                    )
+                    return <StatusBadge status={displayStatus} isDeleting={isDeleting} />
                   })()}
                 </TableCell>
                 <TableCell>
@@ -208,20 +259,31 @@ export function DeploymentsTable({ deployments, isLoading, isError, onRetry, onD
                 </TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   {d.url ? (
-                    <a
-                      href={d.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline flex items-center gap-1"
-                    >
-                      {d.url}
-                      <ExternalLinkIcon className="h-3 w-3" />
-                    </a>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <a
+                            href={d.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-sm font-mono px-2 py-1 rounded-md bg-muted hover:bg-muted/80 transition-colors"
+                          >
+                            <span className="max-w-[200px] truncate">{d.url.replace('http://', '')}</span>
+                            <ExternalLinkIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          </a>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Open {d.url}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   ) : (
-                    <Badge variant="secondary">
-                      <LoaderIcon className="h-3 w-3 mr-1 animate-spin" />
-                      Pending...
-                    </Badge>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="relative">
+                        <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin" />
+                      </div>
+                      <span>Provisioning...</span>
+                    </div>
                   )}
                 </TableCell>
                 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
@@ -278,23 +340,15 @@ export function DeploymentsTable({ deployments, isLoading, isError, onRetry, onD
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <Button
               onClick={(e) => {
                 e.preventDefault()
                 handleDeleteConfirm()
               }}
-              disabled={deleteMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteMutation.isPending ? (
-                <>
-                  <LoaderIcon className="h-4 w-4 mr-2 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                'Delete'
-              )}
+              Delete
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

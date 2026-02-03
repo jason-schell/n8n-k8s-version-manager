@@ -2,11 +2,11 @@ import subprocess
 import re
 import tempfile
 import os
-from datetime import datetime
 from typing import List, Dict
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from validation import validate_namespace, validate_snapshot_name, validate_filename
+import k8s
 
 router = APIRouter(prefix="/api/snapshots", tags=["snapshots"])
 
@@ -303,17 +303,15 @@ async def upload_snapshot(
         with os.fdopen(fd, 'wb') as f:
             f.write(content)
 
-        pod_result = subprocess.run(
-            ["kubectl", "get", "pods", "-n", "n8n-system", "-l", "app=backup-storage",
-             "-o", "jsonpath={.items[0].metadata.name}"],
-            capture_output=True,
-            text=True
+        # Find backup storage pod using k8s module
+        pods = await k8s.list_pods(
+            namespace="n8n-system",
+            label_selector="app=backup-storage"
         )
-
-        if pod_result.returncode != 0 or not pod_result.stdout.strip():
+        if not pods:
             raise HTTPException(status_code=503, detail="Backup storage unavailable")
 
-        backup_pod = pod_result.stdout.strip()
+        backup_pod = pods[0].metadata.name
         dest_path = f"/backups/snapshots/{name}.sql"
 
         cp_result = subprocess.run(

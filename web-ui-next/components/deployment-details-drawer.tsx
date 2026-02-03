@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { QUERY_CONFIG } from '@/lib/query-config'
@@ -25,6 +25,18 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion'
+import { Input } from '@/components/ui/input'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
   CheckCircleIcon,
   AlertCircleIcon,
   ClockIcon,
@@ -36,6 +48,10 @@ import {
   DatabaseIcon,
   LoaderIcon,
   AlertTriangleIcon,
+  SearchIcon,
+  XIcon,
+  PencilIcon,
+  LayersIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { addActivity } from '@/lib/activity'
@@ -449,7 +465,93 @@ function LogsTab({ namespace, enabled }: { namespace: string; enabled: boolean }
   )
 }
 
+// Category configuration for grouping environment variables
+const CATEGORY_CONFIG = {
+  database: { label: 'Database', icon: DatabaseIcon, order: 1 },
+  queue: { label: 'Queue', icon: LayersIcon, order: 2 },
+  n8n: { label: 'n8n Core', icon: SettingsIcon, order: 3 },
+  diagnostics: { label: 'Diagnostics', icon: ActivityIcon, order: 4 },
+  extra: { label: 'Extra', icon: BoxIcon, order: 5 },
+} as const
+
+type CategoryKey = keyof typeof CATEGORY_CONFIG
+
+// Determine category for an environment variable key
+function getEnvCategory(key: string): CategoryKey {
+  const upperKey = key.toUpperCase()
+  if (upperKey.startsWith('DB_') || upperKey.startsWith('DATABASE_') || upperKey.includes('POSTGRES')) {
+    return 'database'
+  }
+  if (upperKey.startsWith('QUEUE_') || upperKey.startsWith('REDIS_') || upperKey.startsWith('BULL_') || upperKey === 'EXECUTIONS_MODE') {
+    return 'queue'
+  }
+  if (upperKey.includes('DIAGNOSTICS') || upperKey.includes('LOG_LEVEL')) {
+    return 'diagnostics'
+  }
+  if (upperKey.startsWith('N8N_') || upperKey === 'WEBHOOK_URL' || upperKey === 'GENERIC_TIMEZONE' || upperKey === 'TZ') {
+    return 'n8n'
+  }
+  return 'extra'
+}
+
+function ConfigRow({ envKey, value }: { envKey: string; value: string }) {
+  const copyToClipboard = async (text: string) => {
+    await navigator.clipboard.writeText(text)
+    toast.success('Copied to clipboard')
+  }
+
+  const handleEditClick = () => {
+    toast.info('Coming soon', {
+      description: 'Environment variable editing will be available in a future update.',
+    })
+  }
+
+  return (
+    <div className="flex items-start gap-2 py-2 border-b last:border-b-0 group">
+      <div className="min-w-[140px] text-sm font-medium text-muted-foreground truncate">
+        {envKey}
+      </div>
+      <div className="flex-1 flex items-center gap-2">
+        <code className="text-sm font-mono bg-muted px-2 py-0.5 rounded break-all flex-1">
+          {value}
+        </code>
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                onClick={() => copyToClipboard(value)}
+              >
+                <CopyIcon className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Copy value</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                onClick={handleEditClick}
+              >
+                <PencilIcon className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Edit (coming soon)</TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ConfigTab({ namespace, enabled }: { namespace: string; enabled: boolean }) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [openCategories, setOpenCategories] = useState<string[]>(['database', 'n8n'])
+
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['config', namespace],
     queryFn: () => api.getNamespaceConfig(namespace),
@@ -457,9 +559,49 @@ function ConfigTab({ namespace, enabled }: { namespace: string; enabled: boolean
     enabled,
   })
 
-  const copyToClipboard = async (value: string) => {
-    await navigator.clipboard.writeText(value)
-    toast.success('Copied to clipboard')
+  // Group and filter entries by category
+  const { categorizedEntries, totalFiltered, totalCount } = useMemo(() => {
+    const config = data?.config || {}
+    const entries = Object.entries(config)
+    const totalCount = entries.length
+
+    // Filter by search query
+    const filtered = searchQuery
+      ? entries.filter(([key, value]) =>
+          key.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          value.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : entries
+
+    // Group by category
+    const categories: Record<CategoryKey, [string, string][]> = {
+      database: [],
+      queue: [],
+      n8n: [],
+      diagnostics: [],
+      extra: [],
+    }
+
+    filtered.forEach(([key, value]) => {
+      const category = getEnvCategory(key)
+      categories[category].push([key, value])
+    })
+
+    // Sort entries within each category
+    Object.values(categories).forEach(arr => arr.sort(([a], [b]) => a.localeCompare(b)))
+
+    return { categorizedEntries: categories, totalFiltered: filtered.length, totalCount }
+  }, [data, searchQuery])
+
+  const allCategoryKeys = Object.keys(CATEGORY_CONFIG)
+  const nonEmptyCategories = allCategoryKeys.filter(key => categorizedEntries[key as CategoryKey].length > 0)
+
+  const handleToggleAll = () => {
+    if (openCategories.length === nonEmptyCategories.length) {
+      setOpenCategories([])
+    } else {
+      setOpenCategories(nonEmptyCategories)
+    }
   }
 
   if (isLoading) {
@@ -475,48 +617,87 @@ function ConfigTab({ namespace, enabled }: { namespace: string; enabled: boolean
     )
   }
 
-  const config = data?.config || {}
-  const entries = Object.entries(config).sort(([a], [b]) => a.localeCompare(b))
-
   return (
     <div className="space-y-3">
+      {/* Header with count and refresh */}
       <div className="flex justify-between items-center">
         <span className="text-sm text-muted-foreground">
-          {entries.length} variable{entries.length !== 1 ? 's' : ''}
+          {searchQuery ? `${totalFiltered} of ${totalCount}` : totalCount} variable{totalCount !== 1 ? 's' : ''}
         </span>
-        <RefreshButton onClick={() => refetch()} isLoading={isFetching} />
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={handleToggleAll}>
+            {openCategories.length === nonEmptyCategories.length ? 'Collapse all' : 'Expand all'}
+          </Button>
+          <RefreshButton onClick={() => refetch()} isLoading={isFetching} />
+        </div>
       </div>
 
-      {entries.length === 0 ? (
+      {/* Search input */}
+      <div className="relative">
+        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Filter variables..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9 pr-8"
+        />
+        {searchQuery && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+            onClick={() => setSearchQuery('')}
+          >
+            <XIcon className="h-3 w-3" />
+          </Button>
+        )}
+      </div>
+
+      {/* Empty states */}
+      {totalCount === 0 ? (
         <div className="text-center py-8 text-muted-foreground">
           No configuration found
         </div>
-      ) : (
-        <div className="space-y-1 max-h-[400px] overflow-y-auto pr-1">
-          {entries.map(([key, value]) => (
-            <div
-              key={key}
-              className="flex items-start gap-2 py-2 border-b last:border-b-0"
-            >
-              <div className="min-w-[180px] text-sm font-medium text-muted-foreground truncate">
-                {key}
-              </div>
-              <div className="flex-1 flex items-center gap-2">
-                <code className="text-sm font-mono bg-muted px-2 py-0.5 rounded break-all flex-1">
-                  {value}
-                </code>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0"
-                  onClick={() => copyToClipboard(value)}
-                >
-                  <CopyIcon className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-          ))}
+      ) : totalFiltered === 0 && searchQuery ? (
+        <div className="text-center py-8 text-muted-foreground">
+          No variables match &quot;{searchQuery}&quot;
         </div>
+      ) : (
+        /* Accordion categories */
+        <Accordion
+          type="multiple"
+          value={openCategories}
+          onValueChange={setOpenCategories}
+          className="space-y-2"
+        >
+          {(Object.entries(CATEGORY_CONFIG) as [CategoryKey, typeof CATEGORY_CONFIG[CategoryKey]][])
+            .sort(([, a], [, b]) => a.order - b.order)
+            .map(([categoryKey, { label, icon: Icon }]) => {
+              const entries = categorizedEntries[categoryKey]
+              if (entries.length === 0) return null
+
+              return (
+                <AccordionItem key={categoryKey} value={categoryKey} className="border rounded-lg px-4">
+                  <AccordionTrigger className="py-3 hover:no-underline">
+                    <div className="flex items-center gap-2 flex-1">
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">{label}</span>
+                      <Badge variant="secondary" className="ml-auto mr-2">
+                        {entries.length}
+                      </Badge>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-3">
+                    <div className="space-y-0">
+                      {entries.map(([key, value]) => (
+                        <ConfigRow key={key} envKey={key} value={value} />
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              )
+            })}
+        </Accordion>
       )}
     </div>
   )

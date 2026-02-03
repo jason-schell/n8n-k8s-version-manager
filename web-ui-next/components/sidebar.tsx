@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { QUERY_CONFIG } from '@/lib/query-config'
 import { cn } from '@/lib/utils'
 
 export function Sidebar() {
@@ -20,8 +21,8 @@ export function Sidebar() {
   const { data: infrastructure, isLoading } = useQuery({
     queryKey: ['infrastructure'],
     queryFn: api.getInfrastructureStatus,
-    staleTime: 30000,
-    refetchInterval: 30000,
+    staleTime: QUERY_CONFIG.infrastructure.staleTime,
+    refetchInterval: QUERY_CONFIG.infrastructure.refetchInterval,
   })
 
   const navItems = [

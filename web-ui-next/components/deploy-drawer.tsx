@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { QUERY_CONFIG } from '@/lib/query-config'
 import { formatMemory, formatAge } from '@/lib/format'
 import {
   Drawer,
@@ -80,21 +81,21 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
   const { data: availableVersions, isLoading: isLoadingVersions, isFetching: isFetchingVersions, refetch: refetchVersions } = useQuery({
     queryKey: ['available-versions'],
     queryFn: api.getAvailableVersions,
-    staleTime: 5 * 60 * 1000, // 5 minutes - versions rarely change
+    staleTime: QUERY_CONFIG.availableVersions.staleTime,
   })
 
   const { data: clusterResources } = useQuery({
     queryKey: ['cluster-resources'],
     queryFn: api.getClusterResources,
-    staleTime: 5000,
-    refetchInterval: open ? 5000 : false, // Only poll while drawer is open
+    staleTime: QUERY_CONFIG.clusterResources.staleTime,
+    refetchInterval: open ? QUERY_CONFIG.clusterResources.refetchInterval : false, // Only poll while drawer is open
   })
 
   // Data is prefetched on page load
   const { data: namedSnapshots, isLoading: isLoadingSnapshots } = useQuery({
     queryKey: ['named-snapshots'],
     queryFn: api.getNamedSnapshots,
-    staleTime: 60000, // 1 minute
+    staleTime: QUERY_CONFIG.namedSnapshots.staleTime,
   })
 
   const QUEUE_MODE_MEMORY = 1792

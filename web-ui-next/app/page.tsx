@@ -12,38 +12,42 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PlusIcon, PackageIcon, DatabaseIcon, RefreshCwIcon } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { QUERY_CONFIG } from '@/lib/query-config'
 
 export default function Home() {
   const [deployDrawerOpen, setDeployDrawerOpen] = useState(false)
   const { data: deployments, isLoading: isLoadingDeployments, isFetching, refetch } = useQuery({
     queryKey: ['deployments'],
     queryFn: api.getDeployments,
-    // Smart polling: 5s when pending deployments exist, 15s when all stable
+    staleTime: QUERY_CONFIG.deployments.staleTime,
+    // Smart polling: faster when pending deployments exist, slower when all stable
     refetchInterval: (query) => {
       const data = query.state.data
       const hasPending = data?.some((d: { status: string }) => d.status === 'pending')
-      return hasPending ? 5000 : 15000
+      return hasPending
+        ? QUERY_CONFIG.deployments.refetchIntervalPending
+        : QUERY_CONFIG.deployments.refetchInterval
     },
   })
 
   const { data: snapshots, isLoading: isLoadingSnapshots } = useQuery({
     queryKey: ['snapshots'],
     queryFn: api.getSnapshots,
-    staleTime: 30000, // Snapshots don't change often
-    refetchInterval: 30000, // Poll every 30s
+    staleTime: QUERY_CONFIG.snapshots.staleTime,
+    refetchInterval: QUERY_CONFIG.snapshots.refetchInterval,
   })
 
   // Prefetch data needed for deploy drawer - loads in background on page load
   useQuery({
     queryKey: ['available-versions'],
     queryFn: api.getAvailableVersions,
-    staleTime: 5 * 60 * 1000, // 5 minutes - versions rarely change
+    staleTime: QUERY_CONFIG.availableVersions.staleTime,
   })
 
   useQuery({
     queryKey: ['named-snapshots'],
     queryFn: api.getNamedSnapshots,
-    staleTime: 60000, // 1 minute
+    staleTime: QUERY_CONFIG.namedSnapshots.staleTime,
   })
 
   return (

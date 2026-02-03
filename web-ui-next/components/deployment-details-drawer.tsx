@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { QUERY_CONFIG } from '@/lib/query-config'
 import type { Deployment, K8sEvent, PodStatus, PodLogs, Snapshot } from '@/lib/types'
 import {
   Sheet,
@@ -66,7 +67,8 @@ function StatusTab({ namespace, enabled }: { namespace: string; enabled: boolean
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['pods', namespace],
     queryFn: () => api.getNamespacePods(namespace),
-    refetchInterval: enabled ? 5000 : false, // Only poll when tab is active
+    staleTime: QUERY_CONFIG.pods.staleTime,
+    refetchInterval: enabled ? QUERY_CONFIG.pods.refetchInterval : false, // Only poll when tab is active
     enabled,
   })
 
@@ -74,7 +76,7 @@ function StatusTab({ namespace, enabled }: { namespace: string; enabled: boolean
   const { data: snapshotsData, isLoading: snapshotsLoading } = useQuery({
     queryKey: ['snapshots'],
     queryFn: api.getSnapshots,
-    staleTime: 30000,
+    staleTime: QUERY_CONFIG.snapshots.staleTime,
   })
 
   const restoreMutation = useMutation({
@@ -267,7 +269,8 @@ function EventsTab({ namespace, enabled }: { namespace: string; enabled: boolean
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['events', namespace],
     queryFn: () => api.getNamespaceEvents(namespace),
-    refetchInterval: enabled ? 5000 : false, // Only poll when tab is active
+    staleTime: QUERY_CONFIG.events.staleTime,
+    refetchInterval: enabled ? QUERY_CONFIG.events.refetchInterval : false, // Only poll when tab is active
     enabled,
   })
 
@@ -374,7 +377,8 @@ function LogsTab({ namespace, enabled }: { namespace: string; enabled: boolean }
         actualPod,
         actualContainer
       ),
-    refetchInterval: enabled ? 10000 : false, // Only poll when tab is active
+    staleTime: QUERY_CONFIG.logs.staleTime,
+    refetchInterval: enabled ? QUERY_CONFIG.logs.refetchInterval : false, // Only poll when tab is active
     enabled,
   })
 
@@ -473,8 +477,7 @@ function ConfigTab({ namespace, enabled }: { namespace: string; enabled: boolean
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['config', namespace],
     queryFn: () => api.getNamespaceConfig(namespace),
-    refetchInterval: false, // Config doesn't change often
-    staleTime: 5 * 60 * 1000, // 5 minutes - config is static
+    staleTime: QUERY_CONFIG.config.staleTime,
     enabled,
   })
 

@@ -452,12 +452,7 @@ async def deploy_version(request: DeployRequest):
                 # Log the warning but treat as success
                 logging.warning(f"Helm reported namespace error but deployment likely succeeded: {error_msg}")
             else:
-                return {
-                    "success": False,
-                    "message": "Deployment failed",
-                    "error": error_msg,
-                    "output": result.stdout
-                }
+                raise HTTPException(status_code=500, detail=error_msg)
 
         # Calculate namespace and URL from version
         if request.name:

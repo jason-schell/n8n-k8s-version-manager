@@ -525,43 +525,8 @@ async def check_namespace_status(namespace: str):
 async def get_namespace_events(namespace: str, limit: int = 50):
     """Get K8s events for a namespace."""
     namespace = validate_namespace(namespace)
-
-    try:
-        result = subprocess.run(
-            ["kubectl", "get", "events", "-n", namespace,
-             "--sort-by=.lastTimestamp", "-o", "json"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Failed to get events: {result.stderr}")
-
-        events = []
-        data = json.loads(result.stdout)
-        items = data.get("items", [])
-
-        # Sort by timestamp descending (newest first) and limit
-        for item in items[:limit]:
-            events.append({
-                "type": item.get("type"),  # Normal, Warning
-                "reason": item.get("reason"),  # Scheduled, Pulled, Started, Failed
-                "message": item.get("message"),
-                "timestamp": item.get("lastTimestamp") or item.get("eventTime"),
-                "count": item.get("count", 1),
-                "object": {
-                    "kind": item.get("involvedObject", {}).get("kind"),
-                    "name": item.get("involvedObject", {}).get("name"),
-                }
-            })
-
-        return {"events": events}
-
-    except json.JSONDecodeError:
-        return {"events": []}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    events = await k8s.list_events(namespace, limit=limit)
+    return {"events": events}
 
 
 @router.get("/{namespace}/pods")
@@ -569,59 +534,49 @@ async def get_namespace_pods(namespace: str):
     """Get detailed pod status for a namespace."""
     namespace = validate_namespace(namespace)
 
-    try:
-        result = subprocess.run(
-            ["kubectl", "get", "pods", "-n", namespace, "-o", "json"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+    pods_data = []
+    pods = await k8s.list_pods(namespace=namespace)
 
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Failed to get pods: {result.stderr}")
-
-        pods = []
-        data = json.loads(result.stdout)
-
-        for item in data.get("items", []):
-            containers = []
-            for cs in item.get("status", {}).get("containerStatuses", []):
-                state = "unknown"
-                state_detail = None
-                if cs.get("state", {}).get("running"):
+    for pod in pods:
+        containers = []
+        for cs in (pod.status.container_statuses or []):
+            state = "unknown"
+            state_detail = None
+            if cs.state:
+                if cs.state.running:
                     state = "running"
-                elif cs.get("state", {}).get("waiting"):
+                elif cs.state.waiting:
                     state = "waiting"
-                    state_detail = cs["state"]["waiting"].get("reason")
-                elif cs.get("state", {}).get("terminated"):
+                    state_detail = cs.state.waiting.reason
+                elif cs.state.terminated:
                     state = "terminated"
-                    state_detail = cs["state"]["terminated"].get("reason")
+                    state_detail = cs.state.terminated.reason
 
-                containers.append({
-                    "name": cs.get("name"),
-                    "ready": cs.get("ready", False),
-                    "state": state,
-                    "state_detail": state_detail,
-                    "restart_count": cs.get("restartCount", 0),
-                })
-
-            pods.append({
-                "name": item["metadata"]["name"],
-                "phase": item.get("status", {}).get("phase"),  # Pending, Running, Succeeded, Failed
-                "containers": containers,
-                "created": item["metadata"].get("creationTimestamp"),
+            containers.append({
+                "name": cs.name,
+                "ready": cs.ready,
+                "state": state,
+                "state_detail": state_detail,
+                "restart_count": cs.restart_count,
             })
 
-        return {"pods": pods}
+        pods_data.append({
+            "name": pod.metadata.name,
+            "phase": pod.status.phase if pod.status else None,
+            "containers": containers,
+            "created": pod.metadata.creation_timestamp.isoformat() if pod.metadata.creation_timestamp else None,
+        })
 
-    except json.JSONDecodeError:
-        return {"pods": []}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"pods": pods_data}
 
 
 @router.get("/{namespace}/logs")
-async def get_namespace_logs(namespace: str, pod: Optional[str] = None, container: Optional[str] = None, tail: int = 100):
+async def get_namespace_logs(
+    namespace: str,
+    pod: Optional[str] = None,
+    container: Optional[str] = None,
+    tail: int = 100
+):
     """Get logs from pods in a namespace."""
     namespace = validate_namespace(namespace)
     if pod:
@@ -629,77 +584,36 @@ async def get_namespace_logs(namespace: str, pod: Optional[str] = None, containe
     if container:
         container = validate_identifier(container, "container")
 
-    try:
-        # If specific pod requested, get just that pod's logs
-        if pod:
-            cmd = ["kubectl", "logs", "-n", namespace, pod, f"--tail={tail}"]
-            if container:
-                cmd.extend(["-c", container])
-
-            log_result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-            return {
-                "logs": [{
-                    "pod": pod,
-                    "container": container,
-                    "logs": log_result.stdout,
-                    "error": log_result.stderr if log_result.returncode != 0 else None
-                }]
-            }
-
-        # Otherwise get logs from all pods
-        pods_result = subprocess.run(
-            ["kubectl", "get", "pods", "-n", namespace, "-o", "jsonpath={.items[*].metadata.name}"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-
-        if not pods_result.stdout.strip():
-            return {"logs": []}
-
-        logs = []
-        for pod_name in pods_result.stdout.split():
-            cmd = ["kubectl", "logs", "-n", namespace, pod_name, f"--tail={tail}"]
-            if container:
-                cmd.extend(["-c", container])
-
-            log_result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-            logs.append({
-                "pod": pod_name,
+    if pod:
+        # Get specific pod logs
+        logs = await k8s.get_pod_logs(namespace, pod, container, tail)
+        return {
+            "logs": [{
+                "pod": pod,
                 "container": container,
-                "logs": log_result.stdout,
-                "error": log_result.stderr if log_result.returncode != 0 else None
-            })
+                "logs": logs,
+                "error": None
+            }]
+        }
 
-        return {"logs": logs}
+    # Get logs from all pods
+    pods = await k8s.list_pods(namespace=namespace)
+    logs_list = []
+    for p in pods:
+        pod_logs = await k8s.get_pod_logs(namespace, p.metadata.name, container, tail)
+        logs_list.append({
+            "pod": p.metadata.name,
+            "container": container,
+            "logs": pod_logs,
+            "error": None
+        })
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"logs": logs_list}
 
 
 @router.get("/{namespace}/config")
 async def get_namespace_config(namespace: str):
     """Get ConfigMap environment variables for a namespace."""
     namespace = validate_namespace(namespace)
-
-    try:
-        # Get the n8n-config ConfigMap directly by name
-        result = subprocess.run(
-            ["kubectl", "get", "configmap", "n8n-config", "-n", namespace, "-o", "json"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-
-        if result.returncode != 0:
-            return {"config": {}, "error": result.stderr}
-
-        data = json.loads(result.stdout)
-        config = data.get("data", {})
-
-        return {"config": config}
-
-    except json.JSONDecodeError:
-        return {"config": {}}
-    except Exception as e:
-        return {"config": {}, "error": str(e)}
+    config_data = await k8s.get_configmap(namespace, "n8n-config")
+    return {"config": config_data}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { formatMemory, formatAge } from '@/lib/format'
@@ -49,6 +49,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { useDebounce } from '@/lib/hooks'
 import { HelmValuesEditor } from '@/components/helm-values-editor'
 import type { HelmValues, K8sEvent, PodStatus } from '@/lib/types'
 
@@ -57,20 +58,6 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 interface DeployDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-}
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState(value)
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value)
-    }, delay)
-
-    return () => clearTimeout(handler)
-  }, [value, delay])
-
-  return debouncedValue
 }
 
 export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {

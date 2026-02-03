@@ -50,3 +50,21 @@ export function formatAge(seconds: number): string {
   if (mins > 0) return `${mins}m`
   return `${seconds}s`
 }
+
+/**
+ * Calculate age in seconds from an ISO date string
+ */
+export function getAgeSeconds(isoDate: string | undefined): number {
+  if (!isoDate) return Infinity
+  const created = new Date(isoDate)
+  const now = new Date()
+  return Math.floor((now.getTime() - created.getTime()) / 1000)
+}
+
+/**
+ * Format age from an ISO date string to human-readable string
+ */
+export function formatAgeFromDate(isoDate: string | undefined): string {
+  if (!isoDate) return '-'
+  return formatAge(getAgeSeconds(isoDate))
+}

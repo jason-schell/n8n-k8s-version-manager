@@ -41,28 +41,9 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Deployment } from '@/lib/types'
+import { getAgeSeconds, formatAgeFromDate } from '@/lib/format'
 import { CreateSnapshotDialog } from './create-snapshot-dialog'
 import { DeploymentDetailsDrawer } from './deployment-details-drawer'
-
-function getAgeSeconds(isoDate: string | undefined): number {
-  if (!isoDate) return Infinity
-  const created = new Date(isoDate)
-  const now = new Date()
-  return Math.floor((now.getTime() - created.getTime()) / 1000)
-}
-
-function formatAge(isoDate: string | undefined): string {
-  if (!isoDate) return '-'
-  const diffSecs = getAgeSeconds(isoDate)
-  const diffMins = Math.floor(diffSecs / 60)
-  const diffHours = Math.floor(diffMins / 60)
-  const diffDays = Math.floor(diffHours / 24)
-
-  if (diffDays > 0) return `${diffDays}d ${diffHours % 24}h`
-  if (diffHours > 0) return `${diffHours}h ${diffMins % 60}m`
-  if (diffMins > 0) return `${diffMins}m`
-  return `${diffSecs}s`
-}
 
 interface DeploymentsTableProps {
   deployments: Deployment[] | undefined
@@ -196,7 +177,7 @@ export function DeploymentsTable({ deployments, isLoading }: DeploymentsTablePro
                 <TableCell>
                   <div className="flex items-center gap-1 text-muted-foreground text-sm">
                     <ClockIcon className="h-3 w-3" />
-                    {formatAge(d.created_at)}
+                    {formatAgeFromDate(d.created_at)}
                   </div>
                 </TableCell>
                 <TableCell>

@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Accordion,
   AccordionContent,
@@ -230,7 +231,16 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
   }
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
+    <Drawer open={open} onOpenChange={(isOpen) => {
+      if (!isOpen) {
+        // Reset form state when drawer closes
+        setVersion('')
+        setMode('queue')
+        setSnapshot('')
+        setHelmValues({})
+      }
+      onOpenChange(isOpen)
+    }}>
       <DrawerContent className="max-w-2xl mx-auto">
         <DrawerHeader>
           <DrawerTitle>Deploy New Version</DrawerTitle>
@@ -240,8 +250,11 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
         </DrawerHeader>
 
         <div className="p-6 space-y-6 overflow-y-auto max-h-[60vh]">
-          {/* Version Selection */}
-          <div className="space-y-2">
+          {/* Essential Settings */}
+          <Card className="border-dashed">
+            <CardContent className="pt-4 space-y-4">
+              {/* Version Selection */}
+              <div className="space-y-2">
             <Label>Version</Label>
             <div className="flex gap-2">
               <Popover open={versionPopoverOpen} onOpenChange={setVersionPopoverOpen}>
@@ -449,7 +462,9 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
             <p className="text-xs text-muted-foreground">
               Select a snapshot to initialize the database with existing data
             </p>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Configuration - Collapsible Accordion */}
           <Accordion type="single" collapsible className="border-t pt-2">

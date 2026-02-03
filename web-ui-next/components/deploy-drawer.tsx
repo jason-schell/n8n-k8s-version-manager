@@ -114,6 +114,25 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
     )
   }, [availableVersions, debouncedSearch])
 
+  // Helper to detect pre-release versions (contains - like 1.92.0-beta.1)
+  const isPrerelease = (version: string) => version.includes('-')
+
+  // Split versions into stable and pre-release groups
+  const { stableVersions, prereleaseVersions } = useMemo(() => {
+    const stable: string[] = []
+    const prerelease: string[] = []
+
+    filteredVersions.forEach((v) => {
+      if (isPrerelease(v)) {
+        prerelease.push(v)
+      } else {
+        stable.push(v)
+      }
+    })
+
+    return { stableVersions: stable, prereleaseVersions: prerelease }
+  }, [filteredVersions])
+
   const isSearching = searchQuery !== debouncedSearch
 
   const trackDeploymentProgress = async (namespace: string, versionStr: string) => {
@@ -288,36 +307,72 @@ export function DeployDrawer({ open, onOpenChange }: DeployDrawerProps) {
                       ) : filteredVersions.length === 0 ? (
                         <CommandEmpty>No version found.</CommandEmpty>
                       ) : (
-                        <CommandGroup>
-                          {filteredVersions.map((v) => (
-                            <CommandItem
-                              key={v}
-                              value={v}
-                              onSelect={(currentValue) => {
-                                setVersion(currentValue)
-                                setVersionPopoverOpen(false)
-                                setSearchQuery('')
-                              }}
-                            >
-                              <CheckIcon
-                                className={cn(
-                                  'mr-2 h-4 w-4',
-                                  version === v ? 'opacity-100' : 'opacity-0'
-                                )}
-                              />
-                              <span className="flex-1">{v}</span>
-                              <a
-                                href={`https://github.com/n8n-io/n8n/releases/tag/n8n@${v}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-muted-foreground hover:text-foreground"
-                              >
-                                <ExternalLinkIcon className="h-3 w-3" />
-                              </a>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
+                        <>
+                          {prereleaseVersions.length > 0 && (
+                            <CommandGroup heading="Pre-releases">
+                              {prereleaseVersions.map((v) => (
+                                <CommandItem
+                                  key={v}
+                                  value={v}
+                                  onSelect={(currentValue) => {
+                                    setVersion(currentValue)
+                                    setVersionPopoverOpen(false)
+                                    setSearchQuery('')
+                                  }}
+                                >
+                                  <CheckIcon
+                                    className={cn(
+                                      'mr-2 h-4 w-4',
+                                      version === v ? 'opacity-100' : 'opacity-0'
+                                    )}
+                                  />
+                                  <span className="flex-1">{v}</span>
+                                  <a
+                                    href={`https://github.com/n8n-io/n8n/releases/tag/n8n@${v}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-muted-foreground hover:text-foreground"
+                                  >
+                                    <ExternalLinkIcon className="h-3 w-3" />
+                                  </a>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          )}
+                          {stableVersions.length > 0 && (
+                            <CommandGroup heading="Stable Releases">
+                              {stableVersions.map((v) => (
+                                <CommandItem
+                                  key={v}
+                                  value={v}
+                                  onSelect={(currentValue) => {
+                                    setVersion(currentValue)
+                                    setVersionPopoverOpen(false)
+                                    setSearchQuery('')
+                                  }}
+                                >
+                                  <CheckIcon
+                                    className={cn(
+                                      'mr-2 h-4 w-4',
+                                      version === v ? 'opacity-100' : 'opacity-0'
+                                    )}
+                                  />
+                                  <span className="flex-1">{v}</span>
+                                  <a
+                                    href={`https://github.com/n8n-io/n8n/releases/tag/n8n@${v}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-muted-foreground hover:text-foreground"
+                                  >
+                                    <ExternalLinkIcon className="h-3 w-3" />
+                                  </a>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          )}
+                        </>
                       )}
                     </CommandList>
                   </Command>
